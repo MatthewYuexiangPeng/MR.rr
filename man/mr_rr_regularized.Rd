@@ -11,7 +11,8 @@ mr_rr_regularized(
   Sigma_X,
   regularization_rate = 1e-13,
   W = NULL,
-  W_inv = NULL
+  W_inv = NULL,
+  implementation = c("spectral", "legacy")
 )
 }
 \arguments{
@@ -34,6 +35,11 @@ amount of spectral regularization.}
 identity matrix is used.}
 
 \item{W_inv}{An optional precomputed inverse of \code{W}.}
+
+\item{implementation}{Numerical implementation used to evaluate the
+regularized inverse. \code{"spectral"} uses the stable eigenspectral formula
+and is the default. \code{"legacy"} reproduces the implementation used for
+the paper analyses.}
 }
 \value{
 A list containing:

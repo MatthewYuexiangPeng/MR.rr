@@ -19,9 +19,16 @@ regularized_test_data <- function() {
     X = X,
     Y = Y,
     Sigma_X = diag(c(0.01, 0.015, 0.02)),
-    W = matrix(c(2.0, 0.3, 0.3, 1.5), nrow = 2)
+    W = matrix(
+      c(
+        2.0, 0.3,
+        0.3, 1.5
+      ),
+      nrow = 2
+    )
   )
 }
+
 
 reference_sqrt_matrix <- function(x) {
   decomposition <- eigen(x)
@@ -34,8 +41,15 @@ reference_sqrt_matrix <- function(x) {
     t(decomposition$vectors)
 }
 
+
 reference_mr_rr_regularized <- function(
-    Y, X, r, Sigma_X, regularization_rate, W = NULL, W_inv = NULL) {
+    Y,
+    X,
+    r,
+    Sigma_X,
+    regularization_rate,
+    W = NULL,
+    W_inv = NULL) {
   n <- nrow(Y)
 
   Sigma_xy <- crossprod(X, Y) / n
@@ -76,13 +90,20 @@ reference_mr_rr_regularized <- function(
 
   B <- crossprod(
     eigenvectors,
-    sqrt_W %*% t(Sigma_xy) %*% stable_Sigma_xx_inv
+    sqrt_W %*%
+      t(Sigma_xy) %*%
+      stable_Sigma_xx_inv
   )
 
-  list(A = A, B = B, AB = A %*% B)
+  list(
+    A = A,
+    B = B,
+    AB = A %*% B
+  )
 }
 
-test_that("mr_rr_regularized matches the frozen unweighted estimator", {
+
+test_that("legacy implementation matches the frozen unweighted estimator", {
   dat <- regularized_test_data()
 
   observed <- mr_rr_regularized(
@@ -90,7 +111,8 @@ test_that("mr_rr_regularized matches the frozen unweighted estimator", {
     X = dat$X,
     r = 1,
     Sigma_X = dat$Sigma_X,
-    regularization_rate = 0.05
+    regularization_rate = 0.05,
+    implementation = "legacy"
   )
 
   expected <- reference_mr_rr_regularized(
@@ -110,7 +132,8 @@ test_that("mr_rr_regularized matches the frozen unweighted estimator", {
   expect_equal(dim(observed$AB), c(2L, 3L))
 })
 
-test_that("mr_rr_regularized matches the frozen weighted estimator", {
+
+test_that("legacy implementation matches the frozen weighted estimator", {
   dat <- regularized_test_data()
 
   observed <- mr_rr_regularized(
@@ -119,7 +142,8 @@ test_that("mr_rr_regularized matches the frozen weighted estimator", {
     r = 1,
     Sigma_X = dat$Sigma_X,
     regularization_rate = 0.05,
-    W = dat$W
+    W = dat$W,
+    implementation = "legacy"
   )
 
   expected <- reference_mr_rr_regularized(
@@ -142,6 +166,85 @@ test_that("mr_rr_regularized matches the frozen weighted estimator", {
   )
 })
 
+
+test_that("spectral and legacy implementations agree for nonsingular inputs", {
+  dat <- regularized_test_data()
+
+  spectral_fit <- mr_rr_regularized(
+    Y = dat$Y,
+    X = dat$X,
+    r = 1,
+    Sigma_X = dat$Sigma_X,
+    regularization_rate = 0.05,
+    implementation = "spectral"
+  )
+
+  legacy_fit <- mr_rr_regularized(
+    Y = dat$Y,
+    X = dat$X,
+    r = 1,
+    Sigma_X = dat$Sigma_X,
+    regularization_rate = 0.05,
+    implementation = "legacy"
+  )
+
+  expect_equal(
+    spectral_fit$AB,
+    legacy_fit$AB,
+    tolerance = 1e-10
+  )
+})
+
+
+test_that("spectral implementation is the default", {
+  dat <- regularized_test_data()
+
+  default_fit <- mr_rr_regularized(
+    Y = dat$Y,
+    X = dat$X,
+    r = 1,
+    Sigma_X = dat$Sigma_X,
+    regularization_rate = 0.05
+  )
+
+  spectral_fit <- mr_rr_regularized(
+    Y = dat$Y,
+    X = dat$X,
+    r = 1,
+    Sigma_X = dat$Sigma_X,
+    regularization_rate = 0.05,
+    implementation = "spectral"
+  )
+
+  expect_equal(
+    default_fit$AB,
+    spectral_fit$AB,
+    tolerance = 0
+  )
+})
+
+
+test_that("spectral regularized inverse handles singular matrices", {
+  S <- diag(c(1, 0, -1))
+  phi <- 0.1
+
+  observed <- .regularized_inverse(S, phi)
+
+  expected <- diag(
+    c(
+      1 / (1 + phi),
+      0,
+      -1 / (1 + phi)
+    )
+  )
+
+  expect_true(all(is.finite(observed)))
+  expect_equal(observed, expected, tolerance = 1e-12)
+
+  expect_error(solve(S))
+})
+
+
 test_that("zero regularization reproduces mr_rr", {
   dat <- regularized_test_data()
 
@@ -150,7 +253,8 @@ test_that("zero regularization reproduces mr_rr", {
     X = dat$X,
     r = 1,
     Sigma_X = dat$Sigma_X,
-    regularization_rate = 0
+    regularization_rate = 0,
+    implementation = "spectral"
   )
 
   corrected_fit <- mr_rr(
@@ -167,12 +271,16 @@ test_that("zero regularization reproduces mr_rr", {
   )
 })
 
+
 test_that("regularization rate is validated", {
   dat <- regularized_test_data()
 
   expect_error(
     mr_rr_regularized(
-      dat$Y, dat$X, 1, dat$Sigma_X,
+      dat$Y,
+      dat$X,
+      1,
+      dat$Sigma_X,
       regularization_rate = -0.1
     ),
     "regularization_rate"
@@ -180,7 +288,10 @@ test_that("regularization rate is validated", {
 
   expect_error(
     mr_rr_regularized(
-      dat$Y, dat$X, 1, dat$Sigma_X,
+      dat$Y,
+      dat$X,
+      1,
+      dat$Sigma_X,
       regularization_rate = Inf
     ),
     "regularization_rate"
@@ -188,7 +299,10 @@ test_that("regularization rate is validated", {
 
   expect_error(
     mr_rr_regularized(
-      dat$Y, dat$X, 1, dat$Sigma_X,
+      dat$Y,
+      dat$X,
+      1,
+      dat$Sigma_X,
       regularization_rate = c(0.1, 0.2)
     ),
     "regularization_rate"
