@@ -23,3 +23,6 @@ Imports:
     rmarkdown
 VignetteBuilder: knitr
 URL: https://matthewyuexiangpeng.github.io/MR.rr/
+Suggests: 
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
