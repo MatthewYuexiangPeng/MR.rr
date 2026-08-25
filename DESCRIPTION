@@ -1,28 +1,35 @@
 Package: MR.rr
-Title: A package for computing the MR-rr estimator and performing simulations
-Version: 0.9.1
-Authors@R: 
+Title: Reduced-Rank Mendelian Randomization with Multiple Exposures and Outcomes
+Version: 0.99.0
+Authors@R:
     c(
-        person("Yuexiang", "Peng", email = "yuexiang@uw.edu", role = c("aut", "cre")),
-        person("Zhilong", "Zhang", email = "zhilongz@uw.edu", role = "aut")
+      person(
+        "Yuexiang", "Peng",
+        email = "peng.1276@osu.edu",
+        role = c("aut", "cre")
+      ),
+      person(
+        "Zhihong", "Zhang",
+        email = "zhilongz@tamu.edu",
+        role = "aut"
+      )
     )
-Description: Compute the MR-rr estimator and perform simulations.
+Description: Implements reduced-rank Mendelian randomization methods for
+    estimating a low-rank causal effect matrix from summary-level genetic
+    association data with multiple exposures and multiple outcomes. Methods
+    include naive, measurement-error-corrected, spectrally regularized, and
+    sparse estimators, together with rank selection and post-selection
+    refitting.
 License: MIT + file LICENSE
 Encoding: UTF-8
-Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.3.1
-Depends: 
-    R (>= 2.10)
-LazyData: true
-Imports: 
-    MASS,
-    ggplot2,
-    patchwork,
-    pheatmap,
-    knitr,
-    rmarkdown
-VignetteBuilder: knitr
-URL: https://matthewyuexiangpeng.github.io/MR.rr/
-Suggests: 
+Depends:
+    R (>= 4.1.0)
+Imports:
+    stats
+Suggests:
     testthat (>= 3.0.0)
 Config/testthat/edition: 3
+Roxygen: list(markdown = TRUE)
+URL: https://github.com/MatthewYuexiangPeng/MR.rr
+BugReports: https://github.com/MatthewYuexiangPeng/MR.rr/issues
+RoxygenNote: 7.3.1
