@@ -108,11 +108,16 @@
 #'   identity matrix is used when this argument is `NULL`.
 #' @param cor_outcome An optional outcome-trait correlation matrix. The
 #'   identity matrix is used when this argument is `NULL`.
-#' @param variant_variance An optional positive numeric vector with one entry
-#'   per instrument. When supplied, all four association and standard-error
-#'   matrices are multiplied rowwise by `sqrt(variant_variance)`. For an
-#'   additive genotype coded as 0, 1, and 2, this is commonly
-#'   `2 * MAF * (1 - MAF)`.
+#' @param allele_frequency An optional numeric vector with one effect-allele
+#'   frequency or minor-allele frequency per instrument. Values must be
+#'   strictly between zero and one. Under Hardy-Weinberg equilibrium and
+#'   additive genotype coding, the function calculates the variant variance as
+#'   `2 * allele_frequency * (1 - allele_frequency)`.
+#' @param variant_variance An optional positive numeric vector containing one
+#'   genotype variance per instrument. This provides a direct alternative to
+#'   `allele_frequency`; the two arguments cannot be supplied together.
+#'   When either argument is supplied, all four association and standard-error
+#'   matrices are multiplied rowwise by `sqrt(variant_variance)`.
 #' @param W An optional positive-definite outcome weight matrix. When `NULL`,
 #'   the function uses the inverse of the constructed outcome measurement-error
 #'   covariance matrix.
@@ -130,7 +135,7 @@
 #'
 #' @return An object of class `mr_rr_data`, represented by a list containing
 #'   `X`, `Y`, `se_X`, `se_Y`, `Sigma_X`, `Sigma_Y`, `W`, `cor_X`, `cor_Y`,
-#'   `variant_variance`, and dimension metadata.
+#'   `allele_frequency`, `variant_variance`, and dimension metadata.
 #'
 #' @export
 prepare_mr_rr_data <- function(
@@ -140,6 +145,7 @@ prepare_mr_rr_data <- function(
     se_outcome,
     cor_exposure = NULL,
     cor_outcome = NULL,
+    allele_frequency = NULL,
     variant_variance = NULL,
     W = NULL) {
   X <- .mr_rr_input_matrix(beta_exposure, "beta_exposure")
@@ -262,6 +268,43 @@ prepare_mr_rr_data <- function(
   dimnames(cor_X) <- list(exposure_names, exposure_names)
   dimnames(cor_Y) <- list(outcome_names, outcome_names)
 
+  if (!is.null(allele_frequency) && !is.null(variant_variance)) {
+    stop(
+      "Supply only one of `allele_frequency` and `variant_variance`.",
+      call. = FALSE
+    )
+  }
+
+  if (!is.null(allele_frequency)) {
+    if (!is.numeric(allele_frequency) ||
+        length(allele_frequency) != n ||
+        anyNA(allele_frequency) ||
+        any(!is.finite(allele_frequency)) ||
+        any(allele_frequency <= 0) ||
+        any(allele_frequency >= 1)) {
+      stop(
+        paste0(
+          "`allele_frequency` must contain one finite value strictly ",
+          "between zero and one per instrument."
+        ),
+        call. = FALSE
+      )
+    }
+
+    if (!is.null(names(allele_frequency)) &&
+        all(has_row_names) &&
+        !identical(names(allele_frequency), rownames(X))) {
+      stop(
+        "Names of `allele_frequency` must match the instrument row order.",
+        call. = FALSE
+      )
+    }
+
+    allele_frequency <- as.numeric(allele_frequency)
+    variant_variance <-
+      2 * allele_frequency * (1 - allele_frequency)
+  }
+
   if (!is.null(variant_variance)) {
     if (!is.numeric(variant_variance) ||
         length(variant_variance) != n ||
@@ -353,6 +396,7 @@ prepare_mr_rr_data <- function(
       W = W,
       cor_X = cor_X,
       cor_Y = cor_Y,
+      allele_frequency = allele_frequency,
       variant_variance = variant_variance,
       n_instruments = n,
       n_exposures = px,

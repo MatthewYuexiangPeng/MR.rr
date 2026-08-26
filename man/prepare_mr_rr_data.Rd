@@ -11,6 +11,7 @@ prepare_mr_rr_data(
   se_outcome,
   cor_exposure = NULL,
   cor_outcome = NULL,
+  allele_frequency = NULL,
   variant_variance = NULL,
   W = NULL
 )
@@ -34,11 +35,17 @@ identity matrix is used when this argument is \code{NULL}.}
 \item{cor_outcome}{An optional outcome-trait correlation matrix. The
 identity matrix is used when this argument is \code{NULL}.}
 
-\item{variant_variance}{An optional positive numeric vector with one entry
-per instrument. When supplied, all four association and standard-error
-matrices are multiplied rowwise by \code{sqrt(variant_variance)}. For an
-additive genotype coded as 0, 1, and 2, this is commonly
-\code{2 * MAF * (1 - MAF)}.}
+\item{allele_frequency}{An optional numeric vector with one effect-allele
+frequency or minor-allele frequency per instrument. Values must be
+strictly between zero and one. Under Hardy-Weinberg equilibrium and
+additive genotype coding, the function calculates the variant variance as
+\code{2 * allele_frequency * (1 - allele_frequency)}.}
+
+\item{variant_variance}{An optional positive numeric vector containing one
+genotype variance per instrument. This provides a direct alternative to
+\code{allele_frequency}; the two arguments cannot be supplied together.
+When either argument is supplied, all four association and standard-error
+matrices are multiplied rowwise by \code{sqrt(variant_variance)}.}
 
 \item{W}{An optional positive-definite outcome weight matrix. When \code{NULL},
 the function uses the inverse of the constructed outcome measurement-error
@@ -47,7 +54,7 @@ covariance matrix.}
 \value{
 An object of class \code{mr_rr_data}, represented by a list containing
 \code{X}, \code{Y}, \code{se_X}, \code{se_Y}, \code{Sigma_X}, \code{Sigma_Y}, \code{W}, \code{cor_X}, \code{cor_Y},
-\code{variant_variance}, and dimension metadata.
+\code{allele_frequency}, \code{variant_variance}, and dimension metadata.
 }
 \description{
 Validates aligned summary-association matrices and constructs the average
