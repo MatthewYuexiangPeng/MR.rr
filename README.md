@@ -13,7 +13,8 @@ The package provides:
 - an optional unpenalized refit after sparse support selection; and
 - a unified interface for fitting one or several estimators.
 
-The package is currently a pre-release research implementation.
+This README documents the current `rebuild/paper-release` branch. The package
+is currently a pre-release research implementation.
 
 ## Installation
 
@@ -70,9 +71,9 @@ library(MR.rr)
 
 set.seed(20260825)
 
-m <- 100L
-p <- 3L
-q <- 2L
+m <- 300L
+p <- 8L
+q <- 3L
 
 instrument_names <- paste0("rs", seq_len(m))
 exposure_names <- paste0("exposure_", seq_len(p))
@@ -85,18 +86,17 @@ beta_exposure <- matrix(
   dimnames = list(instrument_names, exposure_names)
 )
 
-true_effect <- matrix(
-  c(
-    0.30, -0.20, 0.10,
-    0.15,  0.20, -0.10
-  ),
-  nrow = q,
-  byrow = TRUE,
-  dimnames = list(outcome_names, exposure_names)
+true_outcome_loading <- c(0.80, -0.50, 0.30)
+true_exposure_coefficients <- c(0.30, -0.20, 0, 0.15, 0, 0, 0, 0)
+
+true_effect <- outer(
+  true_outcome_loading,
+  true_exposure_coefficients
 )
+dimnames(true_effect) <- list(outcome_names, exposure_names)
 
 beta_outcome <- beta_exposure %*% t(true_effect) +
-  matrix(rnorm(m * q, sd = 0.02), nrow = m, ncol = q)
+  matrix(rnorm(m * q, sd = 0.01), nrow = m, ncol = q)
 dimnames(beta_outcome) <- list(instrument_names, outcome_names)
 
 se_exposure <- matrix(
@@ -134,8 +134,7 @@ fits <- fit_all_mr_rr(
 )
 
 fits
-fits$corrected$AB
-fits$regularized$AB
+round(fits$corrected$AB, digits = 3)
 ```
 
 Each fitted estimator contains:
@@ -159,7 +158,18 @@ fits_selected <- fit_all_mr_rr(
 )
 
 fits_selected$rank
-fits_selected$rank_selection
+
+rank_diagnostics <- with(
+  fits_selected$rank_selection,
+  data.frame(
+    candidate_rank = candidate_ranks,
+    statistic = round(statistic, digits = 3),
+    df = df,
+    p_value = signif(p_value, digits = 3)
+  )
+)
+
+rank_diagnostics
 ```
 
 The rank-selection procedure is a working diagnostic and should be interpreted
@@ -175,19 +185,33 @@ sparse_fit <- fit_mr_rr(
   data = prepared,
   method = "sparse",
   rank = 1,
-  sparse_lambda = 1e-3,
+  sparse_lambda = 1e-2,
   sparse_refit = TRUE,
   sparse_threshold = 1e-2
 )
 
-sparse_fit$B
-sparse_fit$AB
-sparse_fit$sparse_selection$B
+sparse_comparison <- data.frame(
+  exposure = exposure_names,
+  true_support = true_exposure_coefficients != 0,
+  selected_support = as.vector(sparse_fit$sparse_selection$B != 0),
+  penalized_B = round(
+    as.vector(sparse_fit$sparse_selection$B),
+    digits = 3
+  ),
+  refitted_B = round(as.vector(sparse_fit$B), digits = 3)
+)
+
+sparse_comparison
+round(sparse_fit$AB, digits = 3)
 ```
 
 `sparse_fit$B` and `sparse_fit$AB` contain the post-selection refit when
 `sparse_refit = TRUE`. The original penalized estimates are retained in
-`sparse_fit$sparse_selection`.
+`sparse_fit$sparse_selection`. Exact zeros in
+`sparse_fit$sparse_selection$B` define the selected support, while
+`sparse_fit$sparse_selection$B_raw` contains the coefficients before the
+final numerical threshold is applied and is retained for diagnostics rather
+than routine reporting.
 
 ## Regularized implementation
 
@@ -213,4 +237,3 @@ software environment in the reproducibility directory.
 `MR.rr` is the user-facing estimation package. Manuscript-specific simulation,
 bootstrap, cluster-submission, figure-generation, and result-aggregation code
 is maintained separately in the frozen reproducibility materials.
-
