@@ -1,1 +1,0 @@
-Selected rank used by all three MR-rr estimators: 2

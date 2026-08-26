@@ -7,6 +7,4 @@
 ^\.github$
 ^doc$
 ^Meta$
-^freeze$
-^paper$
-^dev$
+^\.git$

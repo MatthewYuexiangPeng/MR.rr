@@ -13,8 +13,8 @@ The package provides:
 - an optional unpenalized refit after sparse support selection; and
 - a unified interface for fitting one or several estimators.
 
-This README documents the current `rebuild/paper-release` branch. The package
-is currently a pre-release research implementation.
+This README documents MR.rr version 0.99.0, a pre-release research
+implementation.
 
 ## Installation
 
