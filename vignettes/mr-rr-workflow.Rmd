@@ -1,0 +1,302 @@
+---
+title: "MR-rr workflow for multiple exposures and outcomes"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{MR-rr workflow for multiple exposures and outcomes}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  message = FALSE,
+  warning = FALSE
+)
+```
+
+## Overview
+
+`MR.rr` estimates a low-rank causal effect matrix from summary-level genetic
+association data with multiple exposures and multiple outcomes. The package
+contains four estimators:
+
+- `"naive"`: reduced-rank estimation without measurement-error correction;
+- `"corrected"`: the main measurement-error-corrected MR-rr estimator;
+- `"regularized"`: a spectrally regularized MR-rr estimator; and
+- `"sparse"`: sparse MR-rr support selection with an optional unpenalized
+  post-selection refit.
+
+This vignette describes the user-facing analysis workflow. Manuscript-specific
+simulation, bootstrap, cluster-submission, and figure-generation scripts are
+not part of the package interface.
+
+```{r load-package}
+library(MR.rr)
+```
+
+## Input structure
+
+Suppose the analysis contains `m` genetic instruments, `p` exposures, and
+`q` outcomes. The four required matrices are:
+
+| Argument | Dimension | Contents |
+|---|---:|---|
+| `beta_exposure` | `m` by `p` | SNP-exposure association estimates |
+| `se_exposure` | `m` by `p` | SNP-exposure standard errors |
+| `beta_outcome` | `m` by `q` | SNP-outcome association estimates |
+| `se_outcome` | `m` by `q` | SNP-outcome standard errors |
+
+Every row must refer to the same genetic instrument in the same order across
+all four matrices. The estimates must already be harmonized to the same effect
+allele. `MR.rr` does not perform allele harmonization, LD clumping, or
+instrument selection.
+
+Optional inputs include:
+
+- `cor_exposure`, a `p` by `p` exposure-trait correlation matrix;
+- `cor_outcome`, a `q` by `q` outcome-trait correlation matrix;
+- `allele_frequency`, one effect-allele or minor-allele frequency per
+  instrument;
+- `variant_variance`, one genotype variance per instrument, supplied instead
+  of `allele_frequency`; and
+- `W`, a positive-definite `q` by `q` outcome weight matrix.
+
+When allele frequencies are supplied, the genotype variance is calculated as
+
+\[
+2 f_j(1-f_j).
+\]
+
+When `W = NULL`, the inverse of the constructed outcome measurement-error
+covariance matrix is used.
+
+## Construct an example dataset
+
+The following example has a rank-one causal effect matrix and eight exposures,
+of which three have nonzero coefficients in the latent pathway.
+
+```{r simulate-data}
+set.seed(20260825)
+
+m <- 300L
+p <- 8L
+q <- 3L
+
+instrument_names <- paste0("rs", seq_len(m))
+exposure_names <- paste0("exposure_", seq_len(p))
+outcome_names <- paste0("outcome_", seq_len(q))
+
+beta_exposure <- matrix(
+  rnorm(m * p, sd = 0.10),
+  nrow = m,
+  ncol = p,
+  dimnames = list(instrument_names, exposure_names)
+)
+
+true_outcome_loading <- c(0.80, -0.50, 0.30)
+true_exposure_coefficients <- c(0.30, -0.20, 0, 0.15, 0, 0, 0, 0)
+
+true_effect <- outer(
+  true_outcome_loading,
+  true_exposure_coefficients
+)
+dimnames(true_effect) <- list(outcome_names, exposure_names)
+
+beta_outcome <- beta_exposure %*% t(true_effect) +
+  matrix(rnorm(m * q, sd = 0.01), nrow = m, ncol = q)
+dimnames(beta_outcome) <- list(instrument_names, outcome_names)
+
+se_exposure <- matrix(
+  0.01,
+  nrow = m,
+  ncol = p,
+  dimnames = list(instrument_names, exposure_names)
+)
+
+se_outcome <- matrix(
+  0.015,
+  nrow = m,
+  ncol = q,
+  dimnames = list(instrument_names, outcome_names)
+)
+
+allele_frequency <- setNames(
+  runif(m, min = 0.10, max = 0.50),
+  instrument_names
+)
+```
+
+## Prepare the data
+
+`prepare_mr_rr_data()` validates dimensions and names, applies optional
+genotype-variance scaling, constructs the average exposure and outcome
+measurement-error covariance matrices, and returns an `mr_rr_data` object.
+
+```{r prepare-data}
+prepared <- prepare_mr_rr_data(
+  beta_exposure = beta_exposure,
+  se_exposure = se_exposure,
+  beta_outcome = beta_outcome,
+  se_outcome = se_outcome,
+  allele_frequency = allele_frequency
+)
+
+c(
+  instruments = prepared$n_instruments,
+  exposures = prepared$n_exposures,
+  outcomes = prepared$n_outcomes
+)
+```
+
+The matrices used by the estimators are available as `prepared$X`,
+`prepared$Y`, `prepared$Sigma_X`, and `prepared$W`.
+
+## Fit several estimators
+
+`fit_all_mr_rr()` applies several estimators to the same prepared data using a
+common working rank.
+
+```{r fit-estimators}
+fits <- fit_all_mr_rr(
+  data = prepared,
+  methods = c("naive", "corrected", "regularized"),
+  rank = 1,
+  regularization_rate = 1e-6
+)
+
+fits
+round(fits$corrected$AB, digits = 3)
+```
+
+Each fitted estimator contains:
+
+- `A`, the outcome loading matrix;
+- `B`, the exposure coefficient matrix; and
+- `AB`, the estimated causal effect matrix.
+
+The method-specific results are accessed by name, such as
+`fits$naive$AB`, `fits$corrected$AB`, and `fits$regularized$AB`.
+
+## Select the working rank
+
+Set `rank = NULL` to apply the sequential rank diagnostic. In a collection of
+fits, rank selection is performed once and the selected rank is reused by all
+requested estimators.
+
+```{r rank-selection}
+fits_selected <- fit_all_mr_rr(
+  data = prepared,
+  methods = c("naive", "corrected", "regularized"),
+  rank = NULL,
+  rank_alpha = 0.05,
+  regularization_rate = 1e-6
+)
+
+fits_selected$rank
+
+rank_diagnostics <- with(
+  fits_selected$rank_selection,
+  data.frame(
+    candidate_rank = candidate_ranks,
+    statistic = round(statistic, digits = 3),
+    df = df,
+    p_value = signif(p_value, digits = 3)
+  )
+)
+
+rank_diagnostics
+```
+
+This procedure is a working rank-selection diagnostic. Its chi-square
+approximation should be interpreted cautiously when instruments are weak.
+
+## Fit sparse MR-rr
+
+Sparse MR-rr uses an L1 penalty to select the support of `B`. With
+`sparse_refit = TRUE`, the selected support is then held fixed while the model
+is refitted without the L1 penalty. The refit reduces shrinkage bias without
+changing the selected support.
+
+The sparse example is not evaluated while building the vignette because it
+requires a convex optimization solver. It can be run interactively after
+installing `CVXR`.
+
+```{r sparse-estimator, eval = FALSE}
+sparse_fit <- fit_mr_rr(
+  data = prepared,
+  method = "sparse",
+  rank = 1,
+  sparse_lambda = 1e-2,
+  sparse_refit = TRUE,
+  sparse_threshold = 1e-2
+)
+
+sparse_comparison <- data.frame(
+  exposure = exposure_names,
+  true_support = true_exposure_coefficients != 0,
+  selected_support = as.vector(sparse_fit$sparse_selection$B != 0),
+  penalized_B = round(
+    as.vector(sparse_fit$sparse_selection$B),
+    digits = 3
+  ),
+  refitted_B = round(as.vector(sparse_fit$B), digits = 3)
+)
+
+sparse_comparison
+round(sparse_fit$AB, digits = 3)
+```
+
+The relevant sparse components are:
+
+- `sparse_fit$sparse_selection$B_raw`: penalized coefficients before the final
+  numerical threshold;
+- `sparse_fit$sparse_selection$B`: thresholded penalized coefficients defining
+  the selected support;
+- `sparse_fit$B`: coefficients after the optional unpenalized refit; and
+- `sparse_fit$AB`: the final estimated causal effect matrix.
+
+## Interpret the factorization
+
+The causal effect matrix is represented as
+
+\[
+C = AB.
+\]
+
+The scales of `A` and `B` depend on the normalization imposed on the
+factorization. Consequently, a numerically large entry of `B` does not by
+itself imply a large causal effect. The primary causal estimand is `AB`.
+`B` is additionally useful for interpreting latent exposure pathways and, in
+the sparse estimator, the selected support.
+
+## Regularized implementation
+
+The default regularized estimator evaluates the spectral filter directly and
+avoids explicitly inverting the unstable corrected exposure matrix:
+
+```{r regularized-estimator}
+regularized_fit <- fit_mr_rr(
+  data = prepared,
+  method = "regularized",
+  rank = 1,
+  regularization_rate = 1e-6,
+  regularized_implementation = "spectral"
+)
+
+round(regularized_fit$AB, digits = 3)
+```
+
+The historical implementation remains available through
+`regularized_implementation = "legacy"` for controlled comparisons. The
+spectral implementation is the package default because it avoids two unstable
+matrix inversions.
+
+## Manuscript reproducibility
+
+The package provides the maintained user-facing estimators. Exact manuscript
+replication uses the frozen analysis scripts, data, results, checksums, and
+recorded software environment under
+`freeze/current_analysis_20260823/project/`. The analysis freeze must remain
+unchanged even when the package implementation is improved.

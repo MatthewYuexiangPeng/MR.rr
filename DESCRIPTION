@@ -28,9 +28,12 @@ Imports:
     CVXR (>= 1.0-15),
     stats
 Suggests:
+    knitr,
+    rmarkdown,
     testthat (>= 3.0.0)
 Config/testthat/edition: 3
 Roxygen: list(markdown = TRUE)
 URL: https://github.com/MatthewYuexiangPeng/MR.rr
 BugReports: https://github.com/MatthewYuexiangPeng/MR.rr/issues
 RoxygenNote: 7.3.1
+VignetteBuilder: knitr
