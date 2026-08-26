@@ -26,7 +26,6 @@ Depends:
     R (>= 4.1.0)
 Imports:
     CVXR (>= 1.0-15),
-    osqp (>= 0.6.3.3),
     stats
 Suggests:
     testthat (>= 3.0.0)
