@@ -1,0 +1,8 @@
+"Metric","Value"
+"threshold",0.001
+"n_exact_recovery",0
+"exact_recovery_rate",0
+"sensitivity",0.951333333333333
+"specificity",0.373888888888889
+"precision",0.603085158836374
+"fdr",0.396914841163626

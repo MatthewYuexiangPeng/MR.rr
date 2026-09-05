@@ -6,3 +6,7 @@ docs
 /doc/
 /Meta/
 inst/doc
+
+# Generated simulation work products
+/paper/output/full_run/
+/paper/output/additional_simulations/

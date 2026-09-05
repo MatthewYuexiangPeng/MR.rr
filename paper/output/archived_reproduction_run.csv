@@ -1,0 +1,4 @@
+"Script","Description","Elapsed_seconds","Status"
+"11_reproduce_manuscript_tables.R","Tables 1-8, Table S3, and numerical inventories",28.61,"PASS"
+"12_reproduce_real_data_figures.R","Figure 2 and supplementary Figures S2 and S12",95.03,"PASS"
+"13_reproduce_simulation_figures.R","Supplementary Figures S1 and S3-S11",15.34,"PASS"
