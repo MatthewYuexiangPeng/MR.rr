@@ -1,0 +1,5 @@
+analysis_id,setting_index,scenario,measurement_error_weight,genetic_effect_weight,truth_rank,working_rank,third_singular_value,method_set,bootstrap_rule,monte_carlo_replicates,bootstrap_size,seed_base,data_seed_group,regularization_rate,sparse_lambda,status
+approximate_low_rank,1,me_2.5_effect_0.25,2.5,0.25,3,2,0.1,ivw;srivw;naive_mr_rr;mr_rr;regularized_mr_rr;sparse_mr_rr;mrdag,all_except_sparse_mr_rr,1000,300,123,generic_setting_1,1.007845e-10,0.0001,provisional_delta
+approximate_low_rank,2,me_1_effect_0.25,1,0.25,3,2,0.1,ivw;srivw;naive_mr_rr;mr_rr;regularized_mr_rr;sparse_mr_rr;mrdag,all_except_sparse_mr_rr,1000,300,123,generic_setting_2,1.57897e-12,0.001,provisional_delta
+approximate_low_rank,3,me_2.5_effect_1,2.5,1,3,2,0.1,ivw;srivw;naive_mr_rr;mr_rr;regularized_mr_rr;sparse_mr_rr;mrdag,all_except_sparse_mr_rr,1000,300,123,generic_setting_3,2.340371e-12,0.001,provisional_delta
+approximate_low_rank,4,me_1_effect_1,1,1,3,2,0.1,ivw;srivw;naive_mr_rr;mr_rr;regularized_mr_rr;sparse_mr_rr;mrdag,all_except_sparse_mr_rr,1000,300,123,generic_setting_4,3.10342e-15,0.001,provisional_delta
