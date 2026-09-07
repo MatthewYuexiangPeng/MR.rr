@@ -1,0 +1,13 @@
+design,setting,measurement_error_weight,genetic_effect_weight,truth_rank,third_singular_value,regularization_rate,sparse_lambda,replicates,bootstrap_size,master_seed,truth_seed,mrdag_niter,mrdag_burnin,sparse_threshold,sparse_max_iter,sparse_tol,sparse_solver
+generic,1,2.5,0.25,2,0,1.007845e-10,0.0001,1000,300,123,123,1000,200,0.01,100,0.01,OSQP
+generic,2,1,0.25,2,0,1.57897e-12,0.001,1000,300,123,123,1000,200,0.01,100,0.01,OSQP
+generic,3,2.5,1,2,0,2.340371e-12,0.001,1000,300,123,123,1000,200,0.01,100,0.01,OSQP
+generic,4,1,1,2,0,3.10342e-15,0.001,1000,300,123,123,1000,200,0.01,100,0.01,OSQP
+sparse_loading,1,2.5,0.25,2,0,9.109067e-11,0.0001,1000,300,123,123,1000,200,0.01,100,0.01,OSQP
+sparse_loading,2,1,0.25,2,0,1.57897e-12,0.001,1000,300,123,123,1000,200,0.01,100,0.01,OSQP
+sparse_loading,3,2.5,1,2,0,2.340371e-12,0.001,1000,300,123,123,1000,200,0.01,100,0.01,OSQP
+sparse_loading,4,1,1,2,0,3.105502e-15,0.001,1000,300,123,123,1000,200,0.01,100,0.01,OSQP
+approximate_low_rank,1,2.5,0.25,3,0.1,1.007845e-10,0.0001,1000,300,123,123,1000,200,0.01,100,0.01,OSQP
+approximate_low_rank,2,1,0.25,3,0.1,1.57897e-12,0.001,1000,300,123,123,1000,200,0.01,100,0.01,OSQP
+approximate_low_rank,3,2.5,1,3,0.1,2.340371e-12,0.001,1000,300,123,123,1000,200,0.01,100,0.01,OSQP
+approximate_low_rank,4,1,1,3,0.1,3.10342e-15,0.001,1000,300,123,123,1000,200,0.01,100,0.01,OSQP
