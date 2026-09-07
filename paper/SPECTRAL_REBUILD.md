@@ -9,8 +9,9 @@ This branch starts from `archive/pre-spectral-20260906` (supplied baseline
 checkout's `R/` directory into an isolated, locked environment. It does not use
 an installed copy of MR.rr, frozen estimators, historical results, or functions
 left in the interactive workspace. The same `R/` sources are included when the
-algorithm package is built. This milestone does not yet replace the old
-simulation/Slurm dispatchers or provide a complete paper rerun command.
+algorithm package is built. The simulation worker milestone below uses this
+entry. A complete paper rerun additionally needs the remaining analyses listed
+at the end of this document.
 
 Run the native core check from the repository root:
 
@@ -113,7 +114,7 @@ production runner must additionally record the Git commit, configuration,
 input hashes, package/solver versions, and per-task provenance. A code commit
 alone does not archive ignored output directories.
 
-## Current milestone: unified simulation design
+## Completed design milestone
 
 `paper/lib/paper_simulation.R` calibrates the design from the committed
 `paper/input/dat_1e-4.csv` and `paper/input/rho_mat_1e-4.csv`. These copy the
@@ -164,10 +165,10 @@ fit or a second bootstrap calculation. Sparse MR-rr has no bootstrap entry:
 SE and CP remain absent in all of these simulation tables. The `working_rank`
 value zero for IVW, SRIVW and MrDAG means "not applicable", not a fitted rank.
 
-The future merger must summarize each result key once, then let both table
-views select that same summary. Equality of shared rank-two rows must be
-checked before exporting the final LaTeX tables. This milestone verifies the
-mapping and a real spectral point/bootstrapped example; table export is later.
+The merger summarizes each result key once, then lets both table views select
+that same summary. It checks equality of shared rank-two rows. The design
+check verifies the mapping and a real spectral point/bootstrapped example;
+final LaTeX export is a later milestone.
 
 ### Random-stream protocol
 
@@ -227,19 +228,94 @@ The default task grouping is:
 | Bootstrap | MrDAG | 20 | 600 |
 
 All 1,800 task records are validated for exact coverage before writing. The
-preparer performs no production estimation and submits no Slurm jobs. Core
-counts, memory, concurrency limits, external estimator adapters and workers
-are specified in the next milestone. The old `submit_additional_full_run.sh`
-does not consume this new manifest.
+preparer performs no production estimation and submits no Slurm jobs. The
+worker milestone below consumes this manifest. The old
+`submit_additional_full_run.sh` does not consume it.
+
+## Current milestone: workers, checkpoints and cluster execution
+
+See [SPECTRAL_CLUSTER.md](SPECTRAL_CLUSTER.md) for the complete installation,
+submission, status and recovery commands. `34_run_spectral_tasks.R` provides
+`seal`, `verify`, `task`, `inventory` and `merge` actions.
+
+`paper/lib/paper_external.R` calls the audited comparator interfaces:
+`mr.divw::mvmr.ivw`, `mr.divw::mvmr.divw` with `phi_cand = NULL`, and
+`MrDAG::MrDAG` with configured iterations/burn-in and thinning 5. The MrDAG
+output order is exposures followed by outcomes when extracting causal
+effects. The installed packages must expose these interfaces; an API mismatch
+fails explicitly. The last working cluster environment used `mr.divw 0.1.0`,
+`MrDAG 0.1.1`, and `CVXR 1.0.15` with OSQP. No package is automatically upgraded.
+
+### Comparator standard-error correction
+
+The old `ivw_multiple_outcomes()` and `adivw_multiple_outcomes()` wrappers used
+`matrix(rep(sd, each = n_snps), nrow = n_snps, byrow = TRUE)`. For unequal
+trait-specific standard errors this mixes the traits within each column.
+The new wrapper fills the matrix **by columns**, giving each exposure/outcome
+its own calibrated standard error at every SNP. The validator checks this
+layout explicitly, and its full native mode checks IVW against uncentered
+least squares when outcome weights are constant across SNPs.
+
+This is a correction to the comparator inputs in addition to the spectral
+MR-rr change. It can change IVW/SRIVW results, depending on which standard
+errors their implementations use. Comparisons with historical tables must
+record this correction and the new Monte Carlo streams. The original
+wrappers remain in the frozen archive. Other audited comparator arguments
+are retained; the new wrapper does not silently switch to a different
+package function or tune a different set of controls.
+
+### Execution and result contract
+
+The run seal records the prepared bundle/task checksums, computation/input
+source checksums, preparation Git provenance, R version/platform/BLAS, installed
+dependency versions, and the direct comparator/solver package code checksums.
+Workers verify the seal against their runtime and checkout. Resume requires
+the recorded computation commit. A changed algorithm or runtime starts a
+new run; it is not mixed into existing completed chunks.
+
+Point tasks use one CPU. Bootstrap tasks maintain a PSOCK worker pool across
+replicates and distribute bootstrap draws to that pool. Each draw receives
+its explicit per-method RNG state, and BLAS/OpenMP threads are set to one.
+The native validator compares serial and PSOCK outputs using exact R-object
+equality, including stochastic MrDAG outputs in full mode.
+
+Checkpoints are saved after **each replicate**, including fit errors and
+warnings. A completed checkpoint is validated and reused. An interrupted
+replicate is recalculated with the same data and streams. Incomplete versions
+are preserved before replacement. Checkpoint files and completed chunk files
+are installed through a same-directory temporary file and rename. The Slurm
+wrapper uses an OS lock for each array task to prevent concurrent duplicates.
+
+Each inferential result requires all B successful bootstrap draws. Its SE is
+the sample SD of those B estimates; percentile CI bounds are the type-7 2.5%
+and 97.5% quantiles. Coverage compares the true effect with these bounds.
+Failed draws never produce partial SE/CP. Per-draw errors and warnings are
+retained; raw successful bootstrap coefficient matrices are summarized rather
+than all retained, and can be regenerated from the sealed inputs and states.
+Sparse point estimates retain convergence and projection diagnostics.
+Finite nonconverged sparse estimates are retained and counted, not hidden;
+their counts must be assessed before manuscript release.
+
+The merger requires every chunk, every replicate and every configured fit.
+It rejects overlapping or non-finite estimates, mismatched source/runtime
+identity, inconsistent point/bootstrap data, and inconsistent SNP resamples
+between standard and MrDAG tasks. It summarizes the 27 effect entries using
+absolute mean bias, empirical SD, mean bootstrap SE, coverage percentage and
+RMSE, then their median and 25th/75th percentiles across entries. Both generic
+table views select the same rank-two summary. The merged directory appears
+only after all validation and all result writes succeed.
+
+`SPECTRAL SIMULATION MERGE: PASS` establishes computational completeness of
+these simulation designs. It does not establish completion of real-data
+analysis, the rest of the paper, or scientific approval of all diagnostics.
 
 ## Remaining milestones
 
-1. Add workers for the prepared generic, sparse-loading and approximate-low-rank
-   tasks. Add IVW/SRIVW/MrDAG adapters with their specified controls.
-2. Extend the workflow for
-   rank selection, support recovery, tuning paths and real-data inference.
-3. Run native environment checks, then the full configured calculations from
-   a fixed commit. Merge with coverage, finite-value and failure checks.
+1. Run the native worker checks and these full simulation arrays from a fixed
+   cluster checkout, then inspect merged results and diagnostic counts.
+2. Extend the workflow for rank selection, support recovery, tuning paths and
+   real-data inference, using the same source engine and recorded controls.
+3. Generate all remaining configured results and validate their merges.
 4. Generate manuscript tables/figures from the new results and update the
    affected text. Validate the extracted candidate release in a clean directory.
 

@@ -1,3 +1,5 @@
 
 freeze/current_analysis_20260823/project/** -text
 paper/input/** text eol=lf
+paper/slurm/run_spectral_task.sbatch text eol=lf
+paper/slurm/submit_spectral_simulations.sh text eol=lf
