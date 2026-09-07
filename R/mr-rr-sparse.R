@@ -1,10 +1,48 @@
+.sparse_corrected_chol <- function(x) {
+  # Keep the historical eigenvalue floor. Also use it when the tolerance-based
+  # PSD check passes but an ordinary (unpivoted) Cholesky factor does not exist.
+  psd_passed <- .is_psd(x)
+  reason <- if (psd_passed) "none" else "not_psd"
+  factor <- if (psd_passed) {
+    tryCatch(chol(x), error = function(e) NULL)
+  } else {
+    NULL
+  }
+  if (psd_passed && is.null(factor)) reason <- "chol_failed"
+  projected <- reason != "none"
+  min_eigenvalue_before <- NA_real_
+  if (projected) {
+    min_eigenvalue_before <- min(eigen(
+      (x + t(x)) / 2, symmetric = TRUE, only.values = TRUE
+    )$values)
+    x <- .nearest_psd(x, epsilon = 1e-6)
+    factor <- tryCatch(chol(x), error = function(e) {
+      stop("The corrected sparse MR-rr covariance remains non-positive-definite after projection.",
+           call. = FALSE)
+    })
+  }
+  list(
+    factor = factor,
+    covariance = x,
+    diagnostics = list(
+      corrected_covariance_projected = projected,
+      projection_reason = reason,
+      psd_check_passed = psd_passed,
+      eigenvalue_floor = if (projected) 1e-6 else NA_real_,
+      min_eigenvalue_before = min_eigenvalue_before
+    )
+  )
+}
+
+
 #' Construct the surrogate exposure matrix used by sparse MR-rr
 #'
 #' This helper intentionally follows the transformation used by the frozen
-#' paper implementation.
+#' paper implementation, with the validated Cholesky fallback for the corrected
+#' covariance. The uncorrected covariance is not repaired.
 #'
 #' @noRd
-.construct_gamma_tilde <- function(Y, X, Sigma_X) {
+.construct_gamma_tilde <- function(Y, X, Sigma_X, diagnostics = FALSE) {
   n <- nrow(X)
 
   P_Y <- tryCatch(
@@ -24,10 +62,6 @@
     Sigma_X_hat - t(projected_X) %*% projected_X / n
   matrix_part2 <- matrix_part1 - Sigma_X
 
-  if (!.is_psd(matrix_part2)) {
-    matrix_part2 <- .nearest_psd(matrix_part2, epsilon = 1e-6)
-  }
-
   R <- tryCatch(
     chol(matrix_part1),
     error = function(e) {
@@ -38,19 +72,17 @@
     }
   )
 
-  Q <- tryCatch(
-    chol(matrix_part2),
-    error = function(e) {
-      stop(
-        "The corrected sparse MR-rr covariance is not positive definite.",
-        call. = FALSE
-      )
-    }
-  )
+  corrected <- .sparse_corrected_chol(matrix_part2)
+  Q <- corrected$factor
 
   L <- solve(R) %*% Q
 
-  P_Y %*% X + (P_Y_complement %*% X) %*% L
+  value <- P_Y %*% X + (P_Y_complement %*% X) %*% L
+  if (isTRUE(diagnostics)) {
+    list(value = value, diagnostics = corrected$diagnostics)
+  } else {
+    value
+  }
 }
 
 
@@ -75,6 +107,9 @@
 #' `lambda` controls the optimization penalty, whereas `threshold` is applied
 #' only after the alternating optimization has finished. The unthresholded
 #' estimates are retained in `B_raw` and `AB_raw`.
+#' The corrected surrogate covariance uses the historical eigenvalue floor
+#' `1e-6` if the PSD check fails or Cholesky fails after that check passes.
+#' This numerical projection is recorded in `numerical_diagnostics`.
 #'
 #' @return A list containing:
 #' \describe{
@@ -87,6 +122,8 @@
 #'   \item{iter}{The number of alternating optimization iterations performed.}
 #'   \item{dist}{The final relative convergence distance.}
 #'   \item{converged}{Whether `dist` was smaller than `tol`.}
+#'   \item{numerical_diagnostics}{Whether the corrected surrogate covariance
+#'     was projected, its reason, and the eigenvalue floor used.}
 #' }
 #'
 #' @export
@@ -184,7 +221,8 @@ mr_rr_sparse <- function(
   }
 
   W_sqrt <- .sqrt_matrix(W)
-  gamma_tilde <- .construct_gamma_tilde(Y, X, Sigma_X)
+  surrogate <- .construct_gamma_tilde(Y, X, Sigma_X, diagnostics = TRUE)
+  gamma_tilde <- surrogate$value
 
   init_result <- mr_rr(
     Y = Y,
@@ -260,6 +298,7 @@ mr_rr_sparse <- function(
     AB_raw = AB_raw,
     iter = iter,
     dist = dist,
-    converged = converged
+    converged = converged,
+    numerical_diagnostics = surrogate$diagnostics
   )
 }

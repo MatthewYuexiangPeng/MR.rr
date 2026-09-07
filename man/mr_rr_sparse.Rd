@@ -60,6 +60,8 @@ A list containing:
 \item{iter}{The number of alternating optimization iterations performed.}
 \item{dist}{The final relative convergence distance.}
 \item{converged}{Whether \code{dist} was smaller than \code{tol}.}
+\item{numerical_diagnostics}{Whether the corrected surrogate covariance
+was projected, its reason, and the eigenvalue floor used.}
 }
 }
 \description{
@@ -70,4 +72,7 @@ L1 penalties to the exposure coefficient matrix.
 \code{lambda} controls the optimization penalty, whereas \code{threshold} is applied
 only after the alternating optimization has finished. The unthresholded
 estimates are retained in \code{B_raw} and \code{AB_raw}.
+The corrected surrogate covariance uses the historical eigenvalue floor
+\code{1e-6} if the PSD check fails or Cholesky fails after that check passes.
+This numerical projection is recorded in \code{numerical_diagnostics}.
 }

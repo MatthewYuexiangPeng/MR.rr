@@ -10,3 +10,11 @@ inst/doc
 # Generated simulation work products
 /paper/output/full_run/
 /paper/output/additional_simulations/
+
+# Local audit and spectral-rebuild products
+/paper/output/repro_audit/
+/paper/output/spectral_rebuild/
+/additional_results_delta01_b300.tar.gz
+/additional_tables_delta01_b300.zip
+/additional_tables_delta01_b300/
+/paper_spectral_core_step1.patch

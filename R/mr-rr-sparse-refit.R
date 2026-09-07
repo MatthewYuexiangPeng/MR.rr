@@ -21,6 +21,8 @@
 #' For the paper analysis, `support` is selected once on the original data and
 #' then held fixed across bootstrap samples. A typical support is
 #' `sparse_fit$B != 0`.
+#' The corrected surrogate covariance uses the same Cholesky fallback and
+#' numerical diagnostics as [mr_rr_sparse()].
 #'
 #' @return A list containing:
 #' \describe{
@@ -32,6 +34,8 @@
 #'   \item{iter}{The number of alternating optimization iterations performed.}
 #'   \item{dist}{The final relative convergence distance.}
 #'   \item{converged}{Whether `dist` was smaller than `tol`.}
+#'   \item{numerical_diagnostics}{Whether the corrected surrogate covariance
+#'     was projected, its reason, and the eigenvalue floor used.}
 #' }
 #'
 #' @export
@@ -144,7 +148,8 @@ mr_rr_sparse_refit <- function(
     stop("`tol` must be a single finite positive number.", call. = FALSE)
   }
 
-  gamma_tilde <- .construct_gamma_tilde(Y, X, Sigma_X)
+  surrogate <- .construct_gamma_tilde(Y, X, Sigma_X, diagnostics = TRUE)
+  gamma_tilde <- surrogate$value
   W_sqrt <- .sqrt_matrix(W)
 
   if (is.null(A_init)) {
@@ -225,6 +230,7 @@ mr_rr_sparse_refit <- function(
     support = support,
     iter = iter,
     dist = dist,
-    converged = converged
+    converged = converged,
+    numerical_diagnostics = surrogate$diagnostics
   )
 }

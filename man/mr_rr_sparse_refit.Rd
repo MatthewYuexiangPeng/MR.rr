@@ -56,6 +56,8 @@ A list containing:
 \item{iter}{The number of alternating optimization iterations performed.}
 \item{dist}{The final relative convergence distance.}
 \item{converged}{Whether \code{dist} was smaller than \code{tol}.}
+\item{numerical_diagnostics}{Whether the corrected surrogate covariance
+was projected, its reason, and the eigenvalue floor used.}
 }
 }
 \description{
@@ -70,4 +72,6 @@ and the same weighted Procrustes update of \code{A} used by \code{mr_rr_sparse()
 For the paper analysis, \code{support} is selected once on the original data and
 then held fixed across bootstrap samples. A typical support is
 \code{sparse_fit$B != 0}.
+The corrected surrogate covariance uses the same Cholesky fallback and
+numerical diagnostics as \code{\link[=mr_rr_sparse]{mr_rr_sparse()}}.
 }
