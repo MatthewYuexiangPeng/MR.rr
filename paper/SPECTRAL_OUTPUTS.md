@@ -10,7 +10,7 @@ load archived estimators, run new fits, or change the input RDS.
 ## Run from the repository root
 
 Use the `paper/spectral-rebuild` branch. Copy the supplied R file into
-`paper/scripts/` and this document into `paper/`. The generated outputs belong
+`paper/scripts/` and the supplied documentation into `paper/`. The generated outputs belong
 under `paper/output/spectral_rebuild/`.
 
 If the recovered archive has not been extracted locally, first run:
@@ -31,7 +31,7 @@ Then run, in R 4.3 or newer:
 ```bash
 Rscript --vanilla paper/scripts/36_make_spectral_simulation_outputs.R \
   --input=paper/output/spectral_rebuild/recovered_input_v1/paper/output/spectral_rebuild/cluster_simulations_v1_blas_recovery/run/merged/spectral_simulation_results.rds \
-  --output=paper/output/spectral_rebuild/manuscript_simulations_style_v2
+  --output=paper/output/spectral_rebuild/manuscript_simulations_layout_v4
 ```
 
 On the cluster, the input already exists, so use:
@@ -39,7 +39,7 @@ On the cluster, the input already exists, so use:
 ```bash
 Rscript --vanilla paper/scripts/36_make_spectral_simulation_outputs.R \
   --input=paper/output/spectral_rebuild/cluster_simulations_v1_blas_recovery/run/merged/spectral_simulation_results.rds \
-  --output=paper/output/spectral_rebuild/manuscript_simulations_style_v2
+  --output=paper/output/spectral_rebuild/manuscript_simulations_layout_v4
 ```
 
 Only base/recommended R components distributed with R are used; CVXR, OSQP,
@@ -47,19 +47,20 @@ MrDAG and mr.divw are not needed for this export. Supply a new output-directory
 name on another run. Existing directories are protected. A failed export leaves
 a staging directory for diagnosis and does not install a completed output.
 
-R writes the four `.tex` tables, nine figure PDFs and nine corresponding PNGs directly. Preview documents
+R writes four compact single-line `.tex` tables, nine unlettered figure PDFs
+and nine corresponding PNGs directly. Preview documents
 can optionally be compiled using LaTeX; this adds no numerical computation:
 
 ```bash
 (
   set -e
-  cd paper/output/spectral_rebuild/manuscript_simulations_style_v2/tables
+  cd paper/output/spectral_rebuild/manuscript_simulations_layout_v4/tables
   pdflatex -interaction=nonstopmode -halt-on-error tables_preview.tex
   pdflatex -interaction=nonstopmode -halt-on-error tables_preview.tex
 )
 (
   set -e
-  cd paper/output/spectral_rebuild/manuscript_simulations_style_v2/figures
+  cd paper/output/spectral_rebuild/manuscript_simulations_layout_v4/figures
   pdflatex -interaction=nonstopmode -halt-on-error figures_preview.tex
 )
 ```
@@ -92,6 +93,7 @@ file names.
 | `statistics/sparse_support_summary.csv`, `sparse_support_replicates.csv`, `sparse_B_entrywise.csv` | Loading/support summaries, all four settings |
 | `statistics/sparse_B_aligned.rds` | Aligned B arrays and their true target |
 | `statistics/figure_boxplot_statistics.csv` | Boxplot hinges, whiskers, extremes and counts outside each viewport |
+| `statistics/figure_viewport_audit.csv` | Per-method lower/upper tail counts, outside percentages and box/median/truth clipping flags |
 | `provenance/output_provenance.rds` | Original computation seal, recovery provenance and exporter identity |
 | `VALIDATION.txt`, `OUTPUT_MD5.csv` | Export checks and fingerprints of the R-generated files |
 
@@ -123,15 +125,24 @@ be changed using `--support-threshold=...`. This reporting threshold is separate
 from the estimator's recorded `sparse_threshold=0.01`. Pooled sensitivity,
 specificity, precision and FDR, as well as exact recovery counts, are exported.
 
-All observations enter table and boxplot calculations. The default display
-window uses pooled 1st and 99th percentiles, includes truth and adds a 6% margin.
-C panels share the scale within each outcome; prediction panels share one scale
-across outcomes within a figure; B panels share one scale across both pathways.
-Values are not winsorized or filtered before computing statistics. For a full
-range view use `--figure-range=full` and a new output directory. The boxplot CSV
-retains extrema and counts outside the viewport.
+All observations enter table and boxplot calculations. In layout v4, the two
+**Setting 1 C figures** default to a fixed `[-1,1]` magnified viewport, common to
+all methods, outcomes and both designs. Triangles mark box hinges outside this
+viewport; the caption explicitly identifies the zoom. `--weak-c-range=inherit`
+restores version 2's pooled 1st/99th-percentile viewport plus truth and a 6%
+margin. `--figure-range=full` overrides the weak-IV zoom and shows the complete
+range for every figure. Use a new output directory for either alternative.
 
-Style v2 restores the archived Exposure/Outcome/Pathway facet layout, light
+The other seven figures keep their version-2 scales: strong-instrument C panels
+share the scale within each outcome; prediction panels share one scale across
+outcomes within a figure; B panels share one scale across both pathways. Their
+central view uses pooled 1st/99th percentiles, truth and a 6% margin. No values
+are winsorized or filtered before computing boxes, whiskers or numerical
+summaries. The boxplot CSV retains extrema and viewport counts; the new
+`figure_viewport_audit.csv` also reports lower/upper tail counts, outside
+percentages and whether a hinge, median or true value lies outside the view.
+
+The facet layout introduced in style v2 restores the archived Exposure/Outcome/Pathway facet layout, light
 grid lines and full estimator labels. A shared legend sits below the plots.
 The default `--figure-palette=paper` uses a fixed, accessible palette;
 `--figure-palette=legacy` restores the archived seven-hue palette and green B
@@ -154,9 +165,11 @@ For an automatic comparison with your previous local output, add:
 ```
 
 This is an **argument to the Rscript command**, not a separate shell command.
-The check requires the same input MD5, identical text in all four LaTeX tables,
-numerically unchanged values in nine statistical CSVs (tolerance 1e-10), and
-unchanged stored aligned B (tolerance zero). Plot axis limits and the B display
+The check requires the same input MD5; identical table captions, setting lines,
+method/rank ordering and displayed numbers after removing layout syntax;
+numerically unchanged values in nine statistical CSVs (tolerance 1e-10); and
+unchanged stored aligned B (tolerance zero). The comparison accepts the old
+stacked cells and the new inline cells, while still rejecting changed numbers. Plot axis limits and the B display
 orientation are presentation metadata and may differ. A successful comparison
 writes `STYLE_COMPARISON.txt`.
 
@@ -216,20 +229,37 @@ components, the BLAS integration above, manuscript numerical text updates, and
 a clean-directory reproduction check are required before calling the entire
 paper package submission-ready.
 
+## Figure and table presentation in layout v4
+
+All nine figures now default to `--panel-labels=none`, as requested by the
+authors. Exposure, Outcome and Pathway facet strips remain. The two weak-IV C
+figures retain the fixed `[-1,1]` zoom and clipped-box markers. No additional
+option is needed to generate the unlettered version. `--panel-labels=letters`
+is an explicit optional override.
+
+The four tables use one line per cell: `median (q25, q75)`. The R exporter writes
+inline content directly and does not redefine LaTeX's `\shortstack`. Tables
+use a 10/12 pt body, fixed local line spacing, a 9/11 pt note and full-width
+`tabular*` with compact minimum column padding. See `SPECTRAL_TABLE_LAYOUT.md`.
+The R-generated table preview uses A4 paper with 1-inch margins, matching the
+supplied manuscript geometry.
+
 ## Record the exporter in Git
 
-After placing the two source files in the existing repository:
+After placing the five source/documentation files in the existing repository:
 
 ```bash
 git add paper/scripts/36_make_spectral_simulation_outputs.R paper/SPECTRAL_OUTPUTS.md \
-  paper/SPECTRAL_FIGURE_STYLE.md paper/PAPER_UPDATE_STATUS.md &&
+  paper/SPECTRAL_FIGURE_STYLE.md paper/PAPER_UPDATE_STATUS.md paper/SPECTRAL_TABLE_LAYOUT.md &&
 git diff --cached --check &&
-git commit -m "Restore manuscript figure facets and add PNG export" &&
+git commit -m "Compact simulation tables and remove default figure panel letters" &&
 git push
 ```
 
 Keep the original archives and large numerical results outside this source
-commit. Style v2 is tested using R 4.6.0 through WebR against the uploaded native
-cluster result and the previous v1 export. Native Windows export of v1 was
-already confirmed by the user. Run the command above to confirm style v2 on
-your native R installation; this is export validation, not estimator refitting.
+commit. Layout v4 is tested using R 4.6.0 through WebR against the uploaded
+native cluster result and the previous v3 export. All numerical CSVs and the
+full-data boxplot statistics remain unchanged. The table files change their
+layout while preserving every displayed number and its method/rank placement.
+Run the Rscript command on native R to generate the local copy; this is export
+validation, not estimator refitting.

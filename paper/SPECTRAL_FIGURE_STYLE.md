@@ -1,6 +1,9 @@
-# Simulation figure presentation, version 2
+# Simulation figure presentation, layout v4
 
-This update modifies the presentation layer of script 36. It reads the same
+Layout v4 uses the version-3 facet design and weak-IV zoom, with **panel
+letters off by default in all nine figures**, as explicitly requested by the
+authors. Named Exposure/Outcome/Pathway strips, axes, colors and statistics are
+unchanged. This document also retains the plotting history for provenance. It reads the same
 strictly merged spectral RDS as version 1 and does not fit any estimator or run
 bootstrap. It was prepared against the exporter committed as `094e466` on
 `paper/spectral-rebuild`.
@@ -31,29 +34,65 @@ the archived replicate-wise heuristic instead of the current alignment rule.
 The mapping is exported as `figure_B_display_map.csv`; original B summaries
 remain in their stored orientation.
 
+## Version 3: weak-instrument C detail views
+
+The two Setting 1 C figures (S4 and S6 in the supplied supplement) now use
+`[-1,1]` on every outcome row of both designs. This is a fixed, shared window,
+not an estimator-specific axis and not a claim that all estimates lie inside
+it. The completed data have all true effects and all 378 boxplot medians
+inside the window. Each figure has nine boxes with at least one hinge beyond
+the boundary; triangles identify those cut boxes. Entire tails, including
+extreme weak-IV estimates, still enter the boxes and numerical summaries.
+
+This choice magnifies differences in central estimates while preserving the
+reported instability in the full-data SDs and the per-method clipping audit.
+Do not infer a method's total variability solely from the visible height of
+a clipped box. Include the generated plotting-window note in the figure caption.
+
+The previous view used one pooled 1st/99th percentile interval per outcome.
+The archived C plotting call used outcome-specific probabilities
+`c(0.98, 0.9925, 0.985)` for its weak-IV example, through `coord_cartesian`.
+Consequently, restoring that code's probabilities would not impose a uniformly
+smaller viewport (the second outcome uses a wider probability interval).
+Version 3 therefore uses an explicit, common zoom instead of treating an old
+probability as an invariant numerical y limit.
+
+| Argument | Effect |
+|---|---|
+| `--weak-c-range=zoom` (default) | Fixed `[-1,1]` in the two Setting 1 C figures |
+| `--weak-c-range=inherit` | Restore version-2 central viewport rules for those figures |
+| `--figure-range=full` | Full range in all figures; overrides the weak-IV zoom |
+| `--panel-labels=none` (default) | No panel letters in all nine figures |
+| `--panel-labels=letters` | Explicit override to restore upper-left letters |
+
+`statistics/figure_viewport_audit.csv` records lower/upper tail counts and
+percentages, hinge clipping, and checks for medians and true values outside
+the window, for each method and facet. `figures/figure_manifest.csv` records
+the effective window rule and panel-label option. Existing table calculations,
+boxplot definitions, prediction summaries and B alignment are unchanged.
+
 ## Presentation choices
 
-| Feature | Version 2 |
+| Feature | Layout v4 |
 |---|---|
 | C | 3 outcome rows by 9 exposure columns; shared y axis within each row |
 | B | 2 pathway rows by 9 exposure columns; common scale for both pathways |
 | Prediction | 3 outcome panels; common y scale within the figure |
-| Labels | Grey facet strips, full method names, small panel letters |
+| Labels | Grey facet strips and full method names; panel letters off |
 | Legend | One shared legend below C and prediction figures |
 | Truth | Red dashed lines; gray dashed lines for zero true B |
 | Palette | Default fixed palette; optional archived palette via `--figure-palette=legacy` |
 | Files | Individual vector PDFs and matching 600-dpi PNGs |
 | Dimensions | C: 7.2 by 5.35 in; B: 7.2 by 3.3 in; prediction: 7.2 by 3.9 in |
 | Captions | Written separately in `captions.txt`; draft alt text in `alt_text.txt` |
-| Display window | Central 98% pooled viewport plus truth and 6% margin; optional full range |
+| Display window | Weak C: fixed `[-1,1]`; other figures: central 98% pooled viewport plus truth and 6% margin; optional full range |
 
 All 1,000 observations enter Tukey box statistics. The viewport may hide tail
 points, but never filters observations before computing boxes, whiskers,
 support rates, or table statistics. The old C code also used viewport limits,
-including manually selected probabilities for some rows. Version 2 uses one
-documented probability rule across figures, and records the number of values
-outside the viewport. It does not restore the archived prediction plot's
-hard-coded `[-2,2]` window.
+including manually selected probabilities for some rows. Version 3 documents
+the weak-C zoom separately and records all out-of-view counts. It does not
+restore the archived prediction plot's hard-coded `[-2,2]` window.
 
 Use `--figure-range=full` in a separate output directory to inspect all tails.
 Use the generated caption for the chosen setting; do not reuse a strong-
@@ -90,19 +129,10 @@ mention the fixed display sign convention, so its orientation is clear when
 compared with the stored B matrix. Replace numerical claims in the surrounding
 text from the regenerated statistics rather than reading off a plotted box.
 
-## JRSSB guidance checked on 2026-09-09
+## Letter setting
 
-The journal recommends vector formats for charts and specifies that figure
-titles/captions belong in the manuscript, with each multipanel figure supplied
-as one file. It also asks for clear labels and accessible descriptions.
-These requirements support keeping PDF as the manuscript figure and providing
-PNG as a convenient companion. They do not prescribe a ggplot theme, this
-palette, these dimensions, or percentile-based display limits; those are
-presentation choices for this paper.
-
-Source: [JRSSB, General Instructions, Figures and figure accessibility](https://academic.oup.com/jrsssb/pages/general-instructions).
-
-Inspect the figures at the actual size used in the compiled manuscript. The
-27-panel C figure is suited to a full-width supplementary page; avoid shrinking
-it to a half-width figure. If a smaller format is required later, split its
-outcome rows into larger panels rather than making the labels smaller.
+The current author-selected default is no letters. The complete R script,
+individual PDFs, PNGs and combined figure preview all use this same default.
+Exposure/Outcome/Pathway labels locate each facet. The optional
+`--panel-labels=letters` switch remains available but is never needed for the
+default export. The v4 delivery contains only the default unlettered figures.

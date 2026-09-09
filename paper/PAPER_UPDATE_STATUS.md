@@ -11,7 +11,7 @@ itself confirm that the manuscript/Overleaf files have been replaced.
 | Main sparse-loading simulation | Complete; strict recovered merge passed | Table, C/B/prediction figures and support statistics generated | Ready; replacement not confirmed |
 | Working-rank sensitivity | Complete; shared rank-two results reused | Table generated; 8 shared rows exactly match main generic table | Ready; replacement not confirmed |
 | Approximate low rank, delta 0.1 | Complete | Table generated | Ready; replacement not confirmed |
-| Simulation figure presentation | Uses the same completed results | Style v2 adds labelled facets, PDF/PNG, display mapping and comparison checks | Replace the 9 simulation figures and their captions |
+| Simulation figure presentation | Uses the same completed results | Layout v4: nine figures without letters, four compact single-line tables; numerical summaries unchanged | Replace the 9 figures and 4 tables; retain labels and use the accompanying captions |
 | Simulation rank-selection experiments | Updated rerun not yet confirmed | Updated rank-selection tables pending | Pending |
 | Simulation sparse tuning paths | Updated rerun pending | Updated tuning figure pending | Pending |
 | Real-data rank selection and tuning paths | Updated rerun pending | Rank test and rank-specific tuning figures pending | Pending |
