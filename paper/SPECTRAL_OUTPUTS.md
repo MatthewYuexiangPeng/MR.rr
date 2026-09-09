@@ -4,7 +4,7 @@ This step exports the completed unified simulation using one base-R program:
 `paper/scripts/36_make_spectral_simulation_outputs.R`.
 The same program is intended for the paper's reproducibility package. It reads
 the merged numerical results, validates their internal consistency, and writes
-LaTeX tables, vector PDF figures and machine-readable statistics. It does not
+LaTeX tables, vector PDF figures, 600-dpi PNG copies and machine-readable statistics. It does not
 load archived estimators, run new fits, or change the input RDS.
 
 ## Run from the repository root
@@ -31,7 +31,7 @@ Then run, in R 4.3 or newer:
 ```bash
 Rscript --vanilla paper/scripts/36_make_spectral_simulation_outputs.R \
   --input=paper/output/spectral_rebuild/recovered_input_v1/paper/output/spectral_rebuild/cluster_simulations_v1_blas_recovery/run/merged/spectral_simulation_results.rds \
-  --output=paper/output/spectral_rebuild/manuscript_simulations_local_v1
+  --output=paper/output/spectral_rebuild/manuscript_simulations_style_v2
 ```
 
 On the cluster, the input already exists, so use:
@@ -39,7 +39,7 @@ On the cluster, the input already exists, so use:
 ```bash
 Rscript --vanilla paper/scripts/36_make_spectral_simulation_outputs.R \
   --input=paper/output/spectral_rebuild/cluster_simulations_v1_blas_recovery/run/merged/spectral_simulation_results.rds \
-  --output=paper/output/spectral_rebuild/manuscript_simulations_local_v1
+  --output=paper/output/spectral_rebuild/manuscript_simulations_style_v2
 ```
 
 Only base/recommended R components distributed with R are used; CVXR, OSQP,
@@ -47,19 +47,19 @@ MrDAG and mr.divw are not needed for this export. Supply a new output-directory
 name on another run. Existing directories are protected. A failed export leaves
 a staging directory for diagnosis and does not install a completed output.
 
-R writes the four `.tex` tables and nine figure PDFs directly. Preview documents
+R writes the four `.tex` tables, nine figure PDFs and nine corresponding PNGs directly. Preview documents
 can optionally be compiled using LaTeX; this adds no numerical computation:
 
 ```bash
 (
   set -e
-  cd paper/output/spectral_rebuild/manuscript_simulations_local_v1/tables
+  cd paper/output/spectral_rebuild/manuscript_simulations_style_v2/tables
   pdflatex -interaction=nonstopmode -halt-on-error tables_preview.tex
   pdflatex -interaction=nonstopmode -halt-on-error tables_preview.tex
 )
 (
   set -e
-  cd paper/output/spectral_rebuild/manuscript_simulations_local_v1/figures
+  cd paper/output/spectral_rebuild/manuscript_simulations_style_v2/figures
   pdflatex -interaction=nonstopmode -halt-on-error figures_preview.tex
 )
 ```
@@ -123,13 +123,52 @@ be changed using `--support-threshold=...`. This reporting threshold is separate
 from the estimator's recorded `sparse_threshold=0.01`. Pooled sensitivity,
 specificity, precision and FDR, as well as exact recovery counts, are exported.
 
-All observations enter table and boxplot calculations. To keep heavy-tailed
-weak-instrument plots readable, the display window uses pooled 1st and 99th
-percentiles within each outcome/pathway, includes the true values, and adds a
-6% margin. Values are not winsorized or filtered before computing statistics.
-The figure captions explicitly describe this viewport; the CSV retains the
-extrema and numbers outside it. Revise the manuscript captions when replacing
-these figures.
+All observations enter table and boxplot calculations. The default display
+window uses pooled 1st and 99th percentiles, includes truth and adds a 6% margin.
+C panels share the scale within each outcome; prediction panels share one scale
+across outcomes within a figure; B panels share one scale across both pathways.
+Values are not winsorized or filtered before computing statistics. For a full
+range view use `--figure-range=full` and a new output directory. The boxplot CSV
+retains extrema and counts outside the viewport.
+
+Style v2 restores the archived Exposure/Outcome/Pathway facet layout, light
+grid lines and full estimator labels. A shared legend sits below the plots.
+The default `--figure-palette=paper` uses a fixed, accessible palette;
+`--figure-palette=legacy` restores the archived seven-hue palette and green B
+boxes. These palettes do not change statistics. The figure contains no overall
+title or descriptive caption; copy the generated caption into the manuscript.
+
+Stored B estimates and their summaries keep the original validated alignment.
+Only the B **figure** additionally uses one fixed signed row permutation chosen
+from the true B: the largest absolute true loading is positive in each pathway,
+and pathways are ordered by that loading's exposure. This matches the archived
+plot's target orientation. `statistics/figure_B_display_map.csv` records the
+mapping; in the current result it leaves pathway 1 unchanged and flips pathway
+2. Applying the same signed permutation to the columns of A preserves C. The
+export never overwrites saved factors or changes selected support.
+
+For an automatic comparison with your previous local output, add:
+
+```bash
+--compare-with=paper/output/spectral_rebuild/manuscript_simulations_local_v1
+```
+
+This is an **argument to the Rscript command**, not a separate shell command.
+The check requires the same input MD5, identical text in all four LaTeX tables,
+numerically unchanged values in nine statistical CSVs (tolerance 1e-10), and
+unchanged stored aligned B (tolerance zero). Plot axis limits and the B display
+orientation are presentation metadata and may differ. A successful comparison
+writes `STYLE_COMPARISON.txt`.
+
+PDF and PNG are drawn by the same R function. Cairo PDF embeds fonts when Cairo
+is available; otherwise the device uses standard Helvetica and records that
+fallback. The default is `--formats=pdf,png --png-dpi=600`; use `--formats=pdf`
+for PDF only or 300/1200 for an explicit alternate PNG resolution. The
+recommended manuscript image is the vector PDF. PNG is provided for convenient
+viewing and existing image workflows. `figures/figure_manifest.csv`,
+`method_colors.csv`, `captions.txt` and `alt_text.txt` record the presentation.
+See `paper/SPECTRAL_FIGURE_STYLE.md` for the old-to-new figure mapping and
+JRSSB guidance.
 
 ## What is already fixed, and what remains for the submission release
 
@@ -182,13 +221,15 @@ paper package submission-ready.
 After placing the two source files in the existing repository:
 
 ```bash
-git add paper/scripts/36_make_spectral_simulation_outputs.R paper/SPECTRAL_OUTPUTS.md &&
+git add paper/scripts/36_make_spectral_simulation_outputs.R paper/SPECTRAL_OUTPUTS.md \
+  paper/SPECTRAL_FIGURE_STYLE.md paper/PAPER_UPDATE_STATUS.md &&
 git diff --cached --check &&
-git commit -m "Add reproducible spectral simulation tables and figures" &&
+git commit -m "Restore manuscript figure facets and add PNG export" &&
 git push
 ```
 
 Keep the original archives and large numerical results outside this source
-commit. The delivered exporter and its generated outputs were tested using
-R 4.6.0 through WebR against the uploaded native-cluster result; this is an
-actual R export test, not another run of the computational estimators.
+commit. Style v2 is tested using R 4.6.0 through WebR against the uploaded native
+cluster result and the previous v1 export. Native Windows export of v1 was
+already confirmed by the user. Run the command above to confirm style v2 on
+your native R installation; this is export validation, not estimator refitting.
