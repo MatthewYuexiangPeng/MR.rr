@@ -20,14 +20,15 @@ spout_key <- function(design, setting, method, rank = 2L) paste(design, paste0("
   method, paste0("rank-", if (method %in% c("ivw", "srivw", "mrdag")) 0L else rank), sep = "__")
 spout_options <- function(args) {
   opts <- list(input = "paper/output/spectral_rebuild/cluster_simulations_v1_blas_recovery/run/merged/spectral_simulation_results.rds",
-    output = "paper/output/spectral_rebuild/manuscript_simulations_style_v2", `support-threshold` = "0.001",
+    output = "paper/output/spectral_rebuild/manuscript_simulations_layout_v4", `support-threshold` = "0.001",
     formats = "pdf,png", `png-dpi` = "600", `figure-palette` = "paper", `figure-range` = "central",
-    `compare-with` = "")
+    `weak-c-range` = "zoom", `panel-labels` = "none", `compare-with` = "")
   if (identical(args, "--help")) {
     cat("Usage: Rscript --vanilla paper/scripts/36_make_spectral_simulation_outputs.R\n",
       "  [--input=MERGED_RDS] [--output=NEW_OUTPUT_DIRECTORY] [--support-threshold=0.001]\n",
       "  [--formats=pdf,png|pdf] [--png-dpi=600] [--figure-palette=paper|legacy]\n",
-      "  [--figure-range=central|full] [--compare-with=PREVIOUS_EXPORT_DIRECTORY]\n",
+      "  [--figure-range=central|full] [--weak-c-range=zoom|inherit]\n",
+      "  [--panel-labels=letters|none] [--compare-with=PREVIOUS_EXPORT_DIRECTORY]\n",
       "The output directory must not already exist. Requires only components included with R.\n")
     return(NULL)
   }
@@ -47,6 +48,8 @@ spout_options <- function(args) {
   spout_assert(opts$`png-dpi` %in% c(300, 600, 1200), "PNG DPI must be 300, 600 or 1200.")
   spout_assert(opts$`figure-palette` %in% c("paper", "legacy"), "Palette must be paper or legacy.")
   spout_assert(opts$`figure-range` %in% c("central", "full"), "Figure range must be central or full.")
+  spout_assert(opts$`weak-c-range` %in% c("zoom", "inherit"), "Weak C range must be zoom or inherit.")
+  spout_assert(opts$`panel-labels` %in% c("letters", "none"), "Panel labels must be letters or none.")
   if ("png" %in% opts$formats) spout_assert(isTRUE(capabilities("png")), "This R build needs a PNG device, or use --formats=pdf.")
   if (nzchar(opts$`compare-with`)) spout_assert(dir.exists(opts$`compare-with`), "Previous export directory not found.")
   opts
@@ -156,11 +159,16 @@ spout_table <- function(rows, table_id, x, out) {
     if (is.na(r[[paste0(metric, "_median")]])) return("---")
     v <- as.numeric(r[paste0(metric, c("_median", "_q25", "_q75"))])
     fmt <- if (metric == "cp_percent") "%.1f" else "%.3f"
-    sprintf("\\shortstack{%s\\\\(%s, %s)}", sprintf(fmt, v[1]), sprintf(fmt, v[2]), sprintf(fmt, v[3]))
+    sprintf("%s\\,(%s,\\,%s)", sprintf(fmt, v[1]), sprintf(fmt, v[2]), sprintf(fmt, v[3]))
   }
-  lines <- c("\\begin{table}[p]", "\\centering", paste0("\\caption{", meta[3], "}\\label{", meta[2], "}"),
-    "\\begingroup\\fontsize{8.7}{9.6}\\selectfont", "\\setlength{\\tabcolsep}{7pt}\\renewcommand{\\arraystretch}{0.94}",
-    paste0("\\begin{tabular}{", if (has_rank) "clrrrr" else "lrrrr", "}\\toprule"),
+  # Single-line cells; keep typography local even in a double-spaced manuscript.
+  lines <- c("\\begin{table}[htbp]", "\\centering", "\\begingroup",
+    "\\def\\baselinestretch{1}\\fontsize{10}{12}\\selectfont\\baselineskip=12pt\\parskip=0pt",
+    "\\setbox\\strutbox=\\hbox{\\vrule height8.5pt depth3.5pt width0pt}",
+    "\\setlength{\\abovecaptionskip}{6pt}\\setlength{\\belowcaptionskip}{6pt}",
+    paste0("\\caption{", meta[3], "}\\label{", meta[2], "}"),
+    "\\setlength{\\tabcolsep}{1.5pt}\\renewcommand{\\arraystretch}{1.1}",
+    paste0("\\begin{tabular*}{\\linewidth}{@{\\extracolsep{\\fill}}", if (has_rank) "clrrrr" else "lrrrr", "@{}}\\toprule"),
     paste0(if (has_rank) "Working rank & " else "", "Estimator & Bias & SD & SE & CP (\\%) \\\\ \\midrule"))
   rr <- rows[rows$table_id == table_id, ]
   for (s in 1:4) {
@@ -173,7 +181,7 @@ spout_table <- function(rows, table_id, x, out) {
     for (i in seq_len(nrow(group))) {
       r <- group[i, ]; values <- c(if (has_rank) r$working_rank, spout_labels[[r$method]],
         vapply(c("bias", "sd", "se", "cp_percent"), function(m) cell(r, m), character(1)))
-      lines <- c(lines, paste0(paste(values, collapse = " & "), " \\\\[1.5pt]"))
+      lines <- c(lines, paste0(paste(values, collapse = " & "), " \\\\"))
     }
     lines <- c(lines, if (s < 4) "\\midrule" else "\\bottomrule")
   }
@@ -182,10 +190,30 @@ spout_table <- function(rows, table_id, x, out) {
     "SE is the mean bootstrap standard error; and CP is coverage of a nominal 95\\% percentile interval, expressed as a percentage. ",
     "Each bootstrap uses 300 SNP resamples. Sparse MR-rr has no bootstrap inference (---). ",
     if (has_rank) "The working-rank-two rows use exactly the same estimates and bootstrap summaries as Table~\\ref{tab:main_regular_C}." else "")
-  lines <- c(lines, "\\end{tabular}\\endgroup", "\\par\\vspace{4pt}\\begin{minipage}{0.98\\textwidth}\\footnotesize",
-    paste0("\\textit{Note:} ", note), "\\end{minipage}", "\\end{table}")
+  lines <- c(lines, "\\end{tabular*}",
+    "\\par\\vspace{4pt}\\begin{minipage}{\\linewidth}",
+    "\\def\\baselinestretch{1}\\fontsize{9}{11}\\selectfont\\baselineskip=11pt\\parskip=0pt",
+    paste0("\\textit{Note:} ", note), "\\par\\end{minipage}\\par\\endgroup", "\\end{table}")
   writeLines(lines, file.path(out, meta[1]), useBytes = TRUE)
   meta[1]
+}
+
+spout_table_payload <- function(file) {
+  lines <- readLines(file, warn = FALSE)
+  data <- lines[grepl(" & ", lines, fixed = TRUE) & !grepl("Estimator", lines, fixed = TRUE)]
+  values <- lapply(data, function(line) {
+    line <- sub(r"( \\\\.*$)", "", line)
+    cells <- strsplit(line, " & ", fixed = TRUE)[[1]]
+    vapply(cells, function(cell) {
+      numbers <- regmatches(cell, gregexpr("[0-9]+(?:\\.[0-9]+)?|---", cell, perl = TRUE))[[1]]
+      if (length(numbers)) paste(numbers, collapse = "|") else trimws(cell)
+    }, character(1), USE.NAMES = FALSE)
+  })
+  caption <- lines[grepl("\\caption{", lines, fixed = TRUE)]
+  settings <- lines[grepl("\\multicolumn{", lines, fixed = TRUE)]
+  spout_assert(length(values) %in% c(24L, 28L) && length(caption) == 1L && length(settings) == 4L,
+    paste("Unrecognized table content:", file))
+  list(caption_and_label = caption, settings = settings, method_rank_and_cells = values)
 }
 
 spout_predict <- function(mat, exposure) {
@@ -299,7 +327,7 @@ spout_display_B <- function(x, support) {
 # graphics text shrinking and retains the same Tukey box statistics as v1.
 spout_draw_facets <- function(panels, rows, cols, row_labels, col_labels,
                               ylab, colors, xlabels = NULL, legend = TRUE,
-                              letters = TRUE) {
+                              letters = FALSE) {
   grid::grid.newpage()
   size <- grDevices::dev.size("in") * 72
   W <- size[1]; H <- size[2]
@@ -348,6 +376,14 @@ spout_draw_facets <- function(panels, rows, cols, row_labels, col_labels,
         width = grid::unit(box_width, "native"), height = grid::unit(q[4] - q[2], "native"),
         gp = grid::gpar(fill = colors[j], col = "#353535", lwd = .65))
       native_lines(j + c(-box_width, box_width) / 2, rep(q[3], 2L), "#222222", 1)
+      # Mark a cut box, not every tail observation. Statistics still use all data.
+      if (isTRUE(p$mark_clipped_boxes)) {
+        for (side in 1:2) if (c(q[2] < p$limits[1], q[4] > p$limits[2])[side])
+          grid::grid.points(x = grid::unit(j, "native"),
+            y = grid::unit(p$limits[side] + c(1, -1)[side] * diff(p$limits) * .015, "native"),
+            pch = c(25, 24)[side], size = grid::unit(1.05, "mm"),
+            gp = grid::gpar(col = "#333333", fill = colors[j], lwd = .55))
+      }
     }
     native_lines(xr, rep(p$truth, 2L), if (n == 1L && p$truth == 0) "#737373" else "#C22E32", .95, 2)
     grid::popViewport()
@@ -409,14 +445,31 @@ spout_figure_device <- function(out, stem, width, height, formats, dpi, draw) {
 }
 
 spout_figures <- function(x, support, out, options) {
-  records <- pred_entries <- captions <- alt <- list(); index <- 0L
+  records <- audits <- pred_entries <- captions <- alt <- list(); index <- 0L
   palette <- if (options$`figure-palette` == "legacy")
     c("#F8766D", "#C49A00", "#53B400", "#00C094", "#00B6EB", "#A58AFF", "#FB61D7") else spout_colors
   formats <- options$formats; mode <- options$`figure-range`; dpi <- options$`png-dpi`
+  panel_letters <- options$`panel-labels` == "letters"
+  weak_zoom <- mode == "central" && options$`weak-c-range` == "zoom"
+  # Fixed plotting window, common to both weak-IV designs, all methods and rows.
+  # This is a magnified view, not a truncation or a change to the estimates.
+  weak_limits <- c(-1, 1)
   record_panels <- function(panels, stem) {
     for (p in panels) {
       index <<- index + 1L
-      records[[index]] <<- spout_box_record(p$values, p$limits, paste0(stem, ".pdf"), p$id, p$keys)
+      rec <- spout_box_record(p$values, p$limits, paste0(stem, ".pdf"), p$id, p$keys)
+      records[[index]] <<- rec
+      audit <- rec[, c("figure", "panel", "result_key", "n", "axis_lower", "axis_upper", "outside_axis")]
+      audit$below_axis <- vapply(p$values, function(a) sum(a < p$limits[1]), integer(1))
+      audit$above_axis <- vapply(p$values, function(a) sum(a > p$limits[2]), integer(1))
+      audit$outside_percent <- 100 * audit$outside_axis / audit$n
+      audit$lower_box_clipped <- rec$lower_hinge < p$limits[1]
+      audit$upper_box_clipped <- rec$upper_hinge > p$limits[2]
+      audit$median_outside_axis <- rec$median < p$limits[1] | rec$median > p$limits[2]
+      audit$true_value <- p$truth
+      audit$truth_outside_axis <- p$truth < p$limits[1] || p$truth > p$limits[2]
+      audit$clipped_box_markers <- isTRUE(p$mark_clipped_boxes)
+      audits[[index]] <<- audit
     }
   }
   window_note <- if (mode == "central") paste("The display window uses pooled 1st and 99th percentiles,",
@@ -430,21 +483,29 @@ spout_figures <- function(x, support, out, options) {
     setting <- sprintf("%s, Setting %d (SIV = %.2f).", if (design == "generic") "Generic low-rank design" else
       "Sparse-loading design", s, x$parameters[[paste(design, s, sep = "/")]]$iv_strength)
     stem <- sprintf("figure_C_%s_setting%d", design, s); panels <- list()
+    zoom <- s == 1L && weak_zoom
+    if (zoom) spout_assert(all(truth >= weak_limits[1] & truth <= weak_limits[2]),
+      "The fixed weak-IV C display window must contain every true effect.")
     for (y in 1:3) {
       rows <- seq(y, 27, by = 3)
-      lim <- spout_limits(unlist(lapply(points, function(p) p[rows, ])), truth[y, ], mode)
+      lim <- if (zoom) weak_limits else
+        spout_limits(unlist(lapply(points, function(p) p[rows, ])), truth[y, ], mode)
       for (j in 1:9) panels[[length(panels) + 1L]] <- list(values = lapply(points, function(p) p[y + 3 * (j - 1), ]),
-        limits = lim, truth = truth[y, j], id = paste(y, j, sep = "/"), keys = keys)
+        limits = lim, truth = truth[y, j], id = paste(y, j, sep = "/"), keys = keys, mark_clipped_boxes = zoom)
     }
     record_panels(panels, stem)
     spout_figure_device(out, stem, 7.2, 5.35, formats, dpi, function()
       spout_draw_facets(panels, 3, 9, paste("Outcome", 1:3), paste("Exposure", 1:9),
-        "Estimated C entry", palette, unname(spout_labels)))
+        "Estimated C entry", palette, unname(spout_labels), letters = panel_letters))
+    C_window_note <- if (zoom) paste("This is a magnified view with the vertical axis fixed at [-1,1] in every facet of both weak-instrument C figures.",
+      "Values outside this window are clipped only in the display; triangles at the boundaries mark boxes whose hinges extend beyond the window.",
+      "The wider dispersion of these estimators must be assessed together with the full-data SDs in the corresponding table.") else window_note
     captions[[paste0(stem, ".pdf")]] <- paste(setting, "Entrywise estimates of C. Rows represent outcomes and columns exposures.",
       "Seven estimators appear in the same left-to-right order in every facet. Red dashed lines indicate the true entries.",
-      "A common vertical scale is used across exposures within each outcome.", window_note, box_note)
+      "A common vertical scale is used across exposures within each outcome.", C_window_note, box_note)
     alt[[paste0(stem, ".pdf")]] <- paste("A three-by-nine grid of boxplots for three outcomes and nine exposures,",
-      "with seven labelled estimators per facet and a dashed line marking the corresponding true effect.", setting)
+      "with seven labelled estimators per facet and a dashed line marking the corresponding true effect.", setting,
+      if (zoom) "All facets use a magnified [-1,1] vertical window; boundary triangles indicate boxes continuing outside it." else "")
     pred <- lapply(points, spout_predict, exposure = x$prediction_exposure)
     target <- as.vector(spout_predict(matrix(as.vector(truth), 27, 1), x$prediction_exposure))
     for (m in seq_along(pred)) for (y in 1:3) {
@@ -461,7 +522,7 @@ spout_figures <- function(x, support, out, options) {
     record_panels(panels, stem)
     spout_figure_device(out, stem, 7.2, 3.9, formats, dpi, function()
       spout_draw_facets(panels, 1, 3, NULL, paste("Outcome", 1:3), "Estimated risk score",
-        palette, unname(spout_labels)))
+        palette, unname(spout_labels), letters = panel_letters))
     captions[[paste0(stem, ".pdf")]] <- paste(setting, "Predicted risk scores from the stored fixed exposure vector.",
       "Red dashed lines indicate the true Cx. A common vertical scale is used for the three outcomes within this figure.", window_note, box_note)
     alt[[paste0(stem, ".pdf")]] <- paste("Three side-by-side boxplot panels compare seven labelled estimators' risk scores",
@@ -476,7 +537,7 @@ spout_figures <- function(x, support, out, options) {
   record_panels(panels, stem)
   spout_figure_device(out, stem, 7.2, 3.3, formats, dpi, function()
     spout_draw_facets(panels, 2, 9, paste("Pathway", 1:2), paste("Exposure", 1:9), "Estimated B entry",
-      if (options$`figure-palette` == "legacy") "#90EE90" else palette[6], legend = FALSE))
+      if (options$`figure-palette` == "legacy") "#90EE90" else palette[6], legend = FALSE, letters = panel_letters))
   captions[[paste0(stem, ".pdf")]] <- paste("Sparse-loading design, Setting 4. Estimated B is aligned to the stored truth over all signed row permutations,",
     "with A transformed jointly to preserve C. For display, a single fixed signed row permutation makes the largest absolute true loading",
     "in each pathway positive and orders pathways by its exposure, matching the convention in the archived plotting code.",
@@ -489,7 +550,8 @@ spout_figures <- function(x, support, out, options) {
     "figure_prediction_generic_setting1.pdf", "figure_prediction_sparse_loading_setting4.pdf",
     "figure_prediction_sparse_loading_setting1.pdf")
   list(boxplots = do.call(rbind, records), prediction = do.call(rbind, pred_entries),
-    captions = captions[manuscript_order], alt = alt[manuscript_order], display_B = display, palette = palette)
+    captions = captions[manuscript_order], alt = alt[manuscript_order], display_B = display, palette = palette,
+    viewport_audit = do.call(rbind, audits))
 }
 
 
@@ -514,7 +576,9 @@ spout_main <- function(args = commandArgs(trailingOnly = TRUE)) {
   write_csv(v$summary, "simulation_summary.csv"); write_csv(v$table_rows, "simulation_table_rows.csv")
   write_csv(v$entrywise, "simulation_entrywise.csv"); write_csv(plots$prediction, "prediction_summary.csv")
   write_csv(plots$display_B$map, "figure_B_display_map.csv")
-  write_csv(plots$boxplots, "figure_boxplot_statistics.csv"); write_csv(support$summary, "sparse_support_summary.csv")
+  write_csv(plots$boxplots, "figure_boxplot_statistics.csv")
+  write_csv(plots$viewport_audit, "figure_viewport_audit.csv")
+  write_csv(support$summary, "sparse_support_summary.csv")
   write_csv(support$replicates, "sparse_support_replicates.csv"); write_csv(support$entrywise, "sparse_B_entrywise.csv")
   write_csv(data.frame(exposure = 1:9, value = x$prediction_exposure), "prediction_exposure.csv")
   write_csv(data.frame(result_key = v$shared, main_table = "main_generic", sensitivity_table = "rank_misspecification",
@@ -522,7 +586,7 @@ spout_main <- function(args = commandArgs(trailingOnly = TRUE)) {
   saveRDS(list(truth = x$truths$sparse_loading, aligned_B = support$aligned,
     alignment = "Minimum squared Frobenius distance over signed row permutations", support_threshold = opts$`support-threshold`),
     file.path(stage, "statistics", "sparse_B_aligned.rds"), version = 2L)
-  table_preview <- c("\\documentclass[10pt,a4paper]{article}", "\\usepackage[margin=15mm]{geometry}",
+  table_preview <- c("\\documentclass[10pt,a4paper]{article}", "\\usepackage[margin=1in]{geometry}",
     "\\usepackage{booktabs,amsmath,lmodern}", "\\usepackage[T1]{fontenc}", "\\begin{document}",
     unlist(lapply(tables, function(f) c(paste0("\\input{", f, "}"), "\\clearpage"))), "\\end{document}")
   writeLines(table_preview, file.path(stage, "tables", "tables_preview.tex"))
@@ -542,7 +606,9 @@ spout_main <- function(args = commandArgs(trailingOnly = TRUE)) {
       ifelse(grepl("figure_B_", names(plots$captions)), 3.3, 3.9)),
     pdf_device = if (isTRUE(capabilities("cairo"))) "cairo_pdf (embedded fonts)" else "pdf (standard Helvetica)",
     png_dpi = if ("png" %in% opts$formats) opts$`png-dpi` else NA, palette = opts$`figure-palette`,
-    viewport = opts$`figure-range`), file.path(stage, "figures", "figure_manifest.csv"), row.names = FALSE)
+    viewport = ifelse(grepl("^figure_C_.*_setting1", names(plots$captions)) &
+      opts$`figure-range` == "central" & opts$`weak-c-range` == "zoom", "fixed [-1,1] magnified view", opts$`figure-range`),
+    panel_labels = opts$`panel-labels`), file.path(stage, "figures", "figure_manifest.csv"), row.names = FALSE)
   comparison <- character()
   if (nzchar(opts$`compare-with`)) {
     old <- opts$`compare-with`
@@ -553,12 +619,12 @@ spout_main <- function(args = commandArgs(trailingOnly = TRUE)) {
     spout_assert(identical(previous_provenance$input_md5, input_md5), "Previous export used a different input RDS.")
     for (f in csv) spout_equal(utils::read.csv(file.path(stage, "statistics", f)),
       utils::read.csv(file.path(old, "statistics", f)), paste("Restyling changed numerical output:", f))
-    for (f in tables) spout_assert(identical(readLines(file.path(stage, "tables", f)),
-      readLines(file.path(old, "tables", f))), paste("Restyling changed table:", f))
+    for (f in tables) spout_assert(identical(spout_table_payload(file.path(stage, "tables", f)),
+      spout_table_payload(file.path(old, "tables", f))), paste("Restyling changed table content:", f))
     spout_equal(readRDS(file.path(stage, "statistics", "sparse_B_aligned.rds")),
       readRDS(file.path(old, "statistics", "sparse_B_aligned.rds")), "Stored sparse alignment changed.", 0)
     comparison <- c("Compared with previous export: PASS (same input MD5)",
-      "All four LaTeX tables unchanged: PASS", "Nine numerical CSV outputs unchanged: PASS (tolerance 1e-10)",
+      "All four table captions, settings, method/rank rows and displayed numbers unchanged: PASS (layout may differ)", "Nine numerical CSV outputs unchanged: PASS (tolerance 1e-10)",
       "Stored aligned sparse B unchanged: PASS (tolerance 0)",
       "B figure uses a fixed recorded signed permutation; stored loading summaries retain their original orientation.")
     writeLines(comparison, file.path(stage, "STYLE_COMPARISON.txt"))
@@ -567,7 +633,7 @@ spout_main <- function(args = commandArgs(trailingOnly = TRUE)) {
   utils::write.csv(x$seal$sources, file.path(stage, "provenance", "computation_sources.csv"), row.names = FALSE)
   utils::write.csv(x$seal$runtime$packages, file.path(stage, "provenance", "computation_packages.csv"), row.names = FALSE)
   script_md5 <- if (!is.na(spout_source)) unname(tools::md5sum(spout_source)) else NA_character_
-  saveRDS(list(schema = "spectral-output-2", presentation_version = "facets-v2", input_run_id = x$run_id, input_md5 = input_md5,
+  saveRDS(list(schema = "spectral-output-2", presentation_version = "layout-v4-single-line-tables-no-panel-letters", input_run_id = x$run_id, input_md5 = input_md5,
     exporter_md5 = script_md5, exporter_R = R.version.string, export_options = opts, B_display_map = plots$display_B$map,
     computation_seal = x$seal, recovery_provenance = x$recovery_provenance), file.path(stage, "provenance", "output_provenance.rds"), version = 2L)
   writeLines(c(paste("Input run ID:", x$run_id), paste("Input MD5:", input_md5), paste("Exporter MD5:", script_md5),
@@ -590,8 +656,13 @@ spout_main <- function(args = commandArgs(trailingOnly = TRUE)) {
     paste("Recorded point warnings:", sum(v$summary$point_warning_count)),
     paste("Recorded bootstrap draws with issues:", sum(v$summary$bootstrap_draws_with_issues)),
     "Figure limits affect the displayed viewport only; all observations enter statistics.",
+    "Table layout: single-line median (quartiles), 10/12 pt body, 9/11 pt note, full line width.",
     paste("Figure formats:", paste(opts$formats, collapse = ", ")),
     paste("Palette:", opts$`figure-palette`, "; viewport:", opts$`figure-range`),
+    paste("Weak-IV C window:", if (opts$`figure-range` == "central" && opts$`weak-c-range` == "zoom")
+      "fixed [-1,1], with clipped-box markers" else "inherited from --figure-range"),
+    paste("Panel labels:", opts$`panel-labels`),
+    "Per-box viewport counts and clipping flags: statistics/figure_viewport_audit.csv",
     "B display orientation follows the archived truth-based sign/order convention; stored fits and alignment unchanged.",
     comparison,
     "Original input RDS unchanged: PASS", "Full computation/recovery verification is inherited from the recorded strict merge.",
