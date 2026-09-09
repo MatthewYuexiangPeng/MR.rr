@@ -1,6 +1,11 @@
 # Manuscript numerical rebuild status
 
-Snapshot: 2026-09-09. “Generated” describes numerical artifacts. It does not
+Snapshot: 2026-09-09 (remaining preparation fix v2).
+The v1 controller `11081429` failed in its preflight reference-data check; no
+production arrays were submitted. V2 loads the original sealed main simulation
+bundle instead of recalibrating the design. Native v2 preflight and production
+completion are pending; the completed main-simulation artifacts remain valid.
+ “Generated” describes numerical artifacts. It does not
 mean the user's current manuscript text has already been replaced and checked.
 
 | Paper item | Computational status | Manuscript status / next action |

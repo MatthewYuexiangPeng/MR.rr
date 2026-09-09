@@ -14,9 +14,10 @@ else
   : "${MRRR_REMAIN_ROOT:?Repository root was not exported by the submitter}"
 fi
 cd "$MRRR_REMAIN_ROOT"
-export MRRR_REMAIN_RUN="${MRRR_REMAIN_RUN:-$MRRR_REMAIN_ROOT/paper/output/spectral_rebuild/cluster_remaining_v1}"
+export MRRR_REMAIN_RUN="${MRRR_REMAIN_RUN:-$MRRR_REMAIN_ROOT/paper/output/spectral_rebuild/cluster_remaining_v2}"
 [[ "$MRRR_REMAIN_RUN" == /* ]] || { echo 'MRRR_REMAIN_RUN must be an absolute path.' >&2; exit 2; }
 export MRRR_REMAIN_REFERENCE="${MRRR_REMAIN_REFERENCE:-$MRRR_REMAIN_ROOT/paper/output/spectral_rebuild/cluster_simulations_v1_blas_recovery/run/merged/spectral_simulation_results.rds}"
+export MRRR_REMAIN_REFERENCE_BUNDLE="${MRRR_REMAIN_REFERENCE_BUNDLE:-$(dirname -- "$(dirname -- "$MRRR_REMAIN_REFERENCE")")/simulation_bundle.rds}"
 MRRR_SCRIPT="$MRRR_REMAIN_ROOT/paper/slurm/submit_spectral_remaining.sh"
 record_job() {
   local label="$1" job="${2%%;*}"
@@ -60,6 +61,7 @@ if [[ "$MRRR_ACTION" == submit || "$MRRR_ACTION" == resume ]]; then
   git diff --quiet; git diff --cached --quiet
   MRRR_COMMIT=$(git rev-parse HEAD)
   test -s "$MRRR_REMAIN_REFERENCE" || { echo "Recovered main result not found: $MRRR_REMAIN_REFERENCE" >&2; exit 1; }
+  test -s "$MRRR_REMAIN_REFERENCE_BUNDLE" || { echo "Original main simulation bundle not found: $MRRR_REMAIN_REFERENCE_BUNDLE" >&2; exit 1; }
   if [[ "$MRRR_ACTION" == submit ]]; then
     [[ ! -e "$MRRR_REMAIN_RUN" ]] || { echo 'Run exists; use status or resume.' >&2; exit 1; }
     mkdir -p "$MRRR_REMAIN_RUN/logs"
@@ -99,9 +101,11 @@ case "$MRRR_ACTION" in
     git diff --quiet; git diff --cached --quiet
     if [[ ! -f "$MRRR_REMAIN_RUN/seal.rds" ]]; then
       Rscript --vanilla paper/scripts/38_validate_spectral_remaining.R --cores=2 \
-        --reference="$MRRR_REMAIN_REFERENCE" --output="$MRRR_REMAIN_RUN/preflight_$MRRR_BATCH"
+        --reference="$MRRR_REMAIN_REFERENCE" --reference-bundle="$MRRR_REMAIN_REFERENCE_BUNDLE" \
+        --output="$MRRR_REMAIN_RUN/preflight_$MRRR_BATCH"
       Rscript --vanilla paper/scripts/37_spectral_remaining.R --action=prepare --profile=full \
-        --run="$MRRR_REMAIN_RUN" --reference="$MRRR_REMAIN_REFERENCE"
+        --run="$MRRR_REMAIN_RUN" --reference="$MRRR_REMAIN_REFERENCE" \
+        --reference-bundle="$MRRR_REMAIN_REFERENCE_BUNDLE"
     fi
     Rscript --vanilla paper/scripts/37_spectral_remaining.R --action=verify --run="$MRRR_REMAIN_RUN"
     Rscript --vanilla paper/scripts/37_spectral_remaining.R --action=inventory --run="$MRRR_REMAIN_RUN"

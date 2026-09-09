@@ -2,7 +2,7 @@
 # Base tests are genuinely executable without CVXR/mr.divw/MrDAG.
 # The full native test also executes the actual packages and PSOCK workers.
 validate_remaining <- function(root = getwd(), output = tempfile("remaining_validation_"),
-                               base_only = FALSE, cores = 2L, reference = "") {
+                               base_only = FALSE, cores = 2L, reference = "", reference_bundle = "") {
   dir.create(output, recursive = TRUE, showWarnings = FALSE)
   a <- new.env(parent = baseenv()); sys.source(file.path(root, "paper/lib/paper_remaining.R"), a)
   ctx <- a$rem_load(root); api <- ctx$api; cfg <- api$rem_config(root)
@@ -80,6 +80,53 @@ validate_remaining <- function(root = getwd(), output = tempfile("remaining_vali
     }
   }
   pass("Materialized pilot data replay and all eight rank-design cells use the canonical main DGP")
+  # A temporary metadata-only fixture exercises the production reference reader.
+  # It contains no estimator results and is never passed to prepare or merge.
+  # Match the extra provenance/fingerprint added by the actual preparation script.
+  extra_source <- "paper/scripts/32_prepare_spectral_simulations.R"
+  bundle$source_manifest <- rbind(bundle$source_manifest, data.frame(path = extra_source,
+    md5 = unname(tools::md5sum(file.path(root, extra_source))), stringsAsFactors = FALSE))
+  bundle$provenance <- list(mode = "REFERENCE_READER_FIXTURE_ONLY")
+  fr <- file.path(output, "reference_reader_fixture_only"); dir.create(file.path(fr, "merged"), recursive = TRUE)
+  bf <- file.path(fr, "simulation_bundle.rds"); rf <- file.path(fr, "merged/reference.rds")
+  saveRDS(bundle, bf, version = 2L)
+  ss <- list(schema = "spectral-run-1", validation_only = FALSE,
+    bundle_md5 = unname(tools::md5sum(bf)), sources = bundle$source_manifest,
+    runtime = list(R = R.version.string))
+  ss$run_id <- api$rem_md5(ss)
+  hashes <- lapply(names(bundle$parameters), function(cell) {
+    v <- strsplit(cell, "/", fixed = TRUE)[[1L]]
+    x <- api$paper_sim_data(bundle, v[1L], as.integer(v[2L]), 1L)
+    rep(api$rem_md5(x[c("X", "Y")]), 1000L)
+  }); names(hashes) <- names(bundle$parameters)
+  rr <- c(list(schema = "spectral-merged-1", seal = ss, run_id = ss$run_id, data_md5 = hashes),
+    bundle[c("config", "truths", "parameters", "prediction_exposure", "catalog", "table_map")])
+  saveRDS(rr, rf, version = 2L); before <- tools::md5sum(c(bf, rf))
+  builder <- api$paper_sim_build_bundle
+  loaded <- tryCatch({
+    api$paper_sim_build_bundle <- function(...) stop("Reference replay attempted to recalibrate the main design.")
+    api$rem_reference_inputs(ctx, rf)
+  }, finally = {api$paper_sim_build_bundle <- builder})
+  stopifnot(identical(loaded$bundle, bundle), identical(loaded$ref, rr),
+    identical(loaded$provenance$bundle_file_md5, ss$bundle_md5))
+  for (design in cfg$rank_designs) for (s in 1:4) {
+    x <- api$paper_sim_data(loaded$bundle, design, s, 1L)
+    api$rem_check_reference_data(x, loaded$ref, design, s, 1L)
+  }
+  fails(api$rem_reference_inputs(ctx, rf, file.path(fr, "missing.rds")))
+  bad <- bundle; bad$parameters[[1L]]$C[1L] <- bad$parameters[[1L]]$C[1L] + 1e-8
+  badfile <- file.path(fr, "wrong_bundle.rds"); saveRDS(bad, badfile, version = 2L)
+  fails(api$rem_reference_inputs(ctx, rf, badfile))
+  bad <- rr; bad$parameters[[1L]]$C[1L] <- bad$parameters[[1L]]$C[1L] + 1e-8
+  fails(api$rem_validate_reference_bundle(ctx, bad, bundle, ss$bundle_md5))
+  bad <- rr; bad$seal$sources$md5[1L] <- strrep("0", 32L)
+  fails(api$rem_validate_reference_bundle(ctx, bad, bundle, ss$bundle_md5))
+  bad <- rr; bad$seal$runtime$R <- "Wrong R version"; badfile <- file.path(fr, "wrong_R.rds")
+  saveRDS(bad, badfile, version = 2L); fails(api$rem_reference_inputs(ctx, badfile, bf))
+  x <- api$paper_sim_data(bundle, "generic", 1L, 1L); x$Y[1L] <- x$Y[1L] + 1e-12
+  fails(api$rem_check_reference_data(x, rr, "generic", 1L, 1L))
+  stopifnot(identical(before, tools::md5sum(c(bf, rf))))
+  pass("Saved-design replay never recalibrates; wrong bundles, sources, R versions and changed data are rejected")
   # Exercise real rank workers/checkpoints in a clearly marked, nonproduction fixture.
   dir.create(file.path(output, "fixture"), showWarnings = FALSE)
   frun <- normalizePath(file.path(output, "fixture"), winslash = "/")
@@ -98,10 +145,19 @@ validate_remaining <- function(root = getwd(), output = tempfile("remaining_vali
   input$data[[1]]$X[1, 1] <- 123; api$paper_write_rds(input, file.path(frun, task$input_path))
   fails(api$rem_input(st, task))
   pass("Checkpoints resume exactly; changed inputs/results and overlapping chunk coverage are rejected")
+  if (nzchar(reference)) {
+    main <- api$rem_reference_inputs(ctx, reference, reference_bundle)
+    for (design in cfg$rank_designs) for (s in 1:4) for (i in 1:2) {
+      x <- api$paper_sim_data(main$bundle, design, s, i)
+      api$rem_check_reference_data(x, main$ref, design, s, i)
+    }
+    stopifnot(identical(main$file_hashes, tools::md5sum(main$files)))
+    pass("Original sealed main bundle replays all 16 development datasets exactly; reference files unchanged")
+  }
   if (!base_only) {
     api$paper_external_require(api$paper_sim_methods())
     run <- file.path(output, "native_development")
-    api$rem_prepare(ctx, run, "development", reference)
+    api$rem_prepare(ctx, run, "development", reference, reference_bundle)
     state <- api$rem_open(ctx, run); real <- readRDS(file.path(run, "inputs/real.rds"))
     for (m in c("ivw", "srivw")) {
       f <- getExportedValue("mr.divw", if (m == "ivw") "mvmr.ivw" else "mvmr.divw")
@@ -145,5 +201,5 @@ if (sys.nframe() == 0L) {
     if (length(x)) sub("^[^=]+=", "", x[1L]) else default
   }
   validate_remaining(opt("root", getwd()), opt("output", file.path(getwd(), "paper/output/spectral_rebuild/remaining_validation")),
-    "--base-only" %in% args, as.integer(opt("cores", "2")), opt("reference", ""))
+    "--base-only" %in% args, as.integer(opt("cores", "2")), opt("reference", ""), opt("reference-bundle", ""))
 }

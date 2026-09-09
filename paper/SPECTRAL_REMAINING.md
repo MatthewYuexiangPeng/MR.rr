@@ -90,6 +90,21 @@ the manuscript.
 
 ## Numerical consistency and reproducibility
 
+Version `remaining-cluster-v2-saved-design` fixes the v1 preparation reader.
+When a strict main merge is supplied, preparation now loads the **original
+`simulation_bundle.rds`**, checks its file MD5 against that merge's original
+seal, and uses its saved calibration, truth matrices, parameters, and RNG
+registry. It does not recalculate those population matrices from raw CSVs.
+Recalibration can introduce floating-point changes even with the same seeds;
+pinning the data-generation kernel does not undo changes made earlier during
+calibration/SVD. The completed BLAS recovery already followed this saved-design
+policy. Sources/raw inputs, configuration, bundle/merge agreement, and the
+canonical RNG registry are also verified. The original R version is required
+for exact object hashes, whose serialization includes the writer version.
+Missing or inconsistent bundles stop preparation; there is no automatic
+recalibration, tolerance, or hash bypass. The original reference files are
+checked again at the end and their identities are saved in the new seal.
+
 The controller creates every rank/pilot dataset and the shared 177-by-1,000
 real bootstrap index matrix once, before array submission. Workers read those
 saved inputs. With the recovered main result supplied, **all 8,000 rank-study
@@ -128,19 +143,39 @@ the cluster checkout with an explicit branch refspec:
   git diff --quiet
   git diff --cached --quiet
   git fetch origin refs/heads/paper/spectral-rebuild:refs/remotes/origin/paper/spectral-rebuild
-  git switch paper/spectral-rebuild
+  if git show-ref --verify --quiet refs/heads/paper/spectral-rebuild; then
+    git switch paper/spectral-rebuild
+  else
+    git switch --no-track -c paper/spectral-rebuild refs/remotes/origin/paper/spectral-rebuild
+  fi
   git merge --ff-only origin/paper/spectral-rebuild
+  export MRRR_REMAIN_RUN="$PWD/paper/output/spectral_rebuild/cluster_remaining_v2"
   bash paper/slurm/submit_spectral_remaining.sh submit
 )
 ```
 
 Default output directory:
-`paper/output/spectral_rebuild/cluster_remaining_v1`.
+`paper/output/spectral_rebuild/cluster_remaining_v2`.
 
 Default reference:
 `paper/output/spectral_rebuild/cluster_simulations_v1_blas_recovery/run/merged/spectral_simulation_results.rds`.
 For this completed main run, its ID is `08c2f8e7e5d4119ac1e18264a64b711e` and
 its file MD5 is `b13e2682325c0861b56338bb8bf50be5`.
+
+The default bundle is `simulation_bundle.rds` in the reference's run directory,
+next to `merged/`. Set `MRRR_REMAIN_REFERENCE_BUNDLE=/absolute/path` if it was
+archived elsewhere; the file must still match the original seal. Direct R calls
+accept `--reference-bundle=PATH`. The default is inferred from `--reference`.
+
+The failed v1 controller `11081429` stopped during preflight before production
+arrays. Keep `cluster_remaining_v1` and its submission commit/logs as evidence;
+use the new default `cluster_remaining_v2` for the corrected code. Do not edit
+the old submission commit file to force a resume with changed source.
+
+The reference reader has base-R regression checks for saved-design reuse,
+missing/changed bundles, changed sources, changed R versions, and altered data.
+With the real reference supplied, it also requires exact replay of all 16
+development datasets (two replicates in each of eight cells).
 
 The controller runs a complete native development preflight (actual
 CVXR/OSQP, mr.divw, MrDAG, serial/PSOCK equality, checkpoint checks, and a strict
@@ -224,7 +259,7 @@ be collected with:
 (
   set -e
   cd /home/peng.1276/MRrr-spectral-cluster
-  MRRR_REMAIN_REL=paper/output/spectral_rebuild/cluster_remaining_v1
+  MRRR_REMAIN_REL=paper/output/spectral_rebuild/cluster_remaining_v2
   grep -Fx 'SPECTRAL REMAINING STRICT MERGE: PASS' "$MRRR_REMAIN_REL/merged/STATUS.txt"
   grep -Fx 'Production: TRUE' "$MRRR_REMAIN_REL/merged/STATUS.txt"
   MRRR_REMAIN_ARCHIVE="spectral_remaining_results_$(date -u +%Y%m%dT%H%M%S).tar.gz"

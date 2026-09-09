@@ -2,7 +2,7 @@
 # CLI for the remaining-paper computation. This script never reads frozen fits.
 remaining_main <- function(args = commandArgs(TRUE)) {
   opts <- list(action = "", root = getwd(), run = "", profile = "full",
-    reference = "", task = "", cores = "1")
+    reference = "", "reference-bundle" = "", task = "", cores = "1")
   for (a in args) {
     if (!grepl("^--[a-z-]+=", a)) stop("Use --name=value arguments: ", a)
     name <- sub("^--([^=]+)=.*$", "\\1", a)
@@ -15,7 +15,8 @@ remaining_main <- function(args = commandArgs(TRUE)) {
   a <- new.env(parent = baseenv())
   sys.source(file.path(opts$root, "paper/lib/paper_remaining.R"), a)
   ctx <- a$rem_load(opts$root)
-  if (opts$action == "prepare") return(invisible(ctx$api$rem_prepare(ctx, opts$run, opts$profile, opts$reference)))
+  if (opts$action == "prepare") return(invisible(ctx$api$rem_prepare(ctx, opts$run, opts$profile,
+    opts$reference, opts[["reference-bundle"]])))
   state <- ctx$api$rem_open(ctx, opts$run, runtime = opts$action != "inventory")
   if (opts$action == "verify") cat("SPECTRAL REMAINING RUN VERIFICATION: PASS\n")
   if (opts$action == "task") {

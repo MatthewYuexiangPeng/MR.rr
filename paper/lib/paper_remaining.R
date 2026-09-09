@@ -238,28 +238,98 @@ rem_pilot_data <- function(bundle, setting, pilot, rng) {
       Sigma_X = p$Sigma_X, Sigma_Y = p$Sigma_Y, W = p$weight.matrix)
   })
 }
-rem_prepare <- function(ctx, run, profile = "full", reference = "") {
+rem_validate_reference_bundle <- function(ctx, ref, b, bundle_md5) {
+  # The strict main merge authenticates the serialized design. Rebuilding its
+  # SVD/calibration on a different BLAS is not an exact replay of that design.
+  cells <- as.vector(outer(paper_sim_designs(), 1:4, paste, sep = "/"))
+  rem_assert(identical(ref$schema, "spectral-merged-1") &&
+    identical(ref$seal$schema, "spectral-run-1") && identical(ref$seal$validation_only, FALSE) &&
+    identical(ref$run_id, ref$seal$run_id) && setequal(names(ref$data_md5), cells) &&
+    all(lengths(ref$data_md5) == 1000L) && all(grepl("^[0-9a-f]{32}$", unlist(ref$data_md5))),
+    "Reference is not a complete production strict merge.")
+  rem_assert(identical(bundle_md5, ref$seal$bundle_md5),
+    "Reference simulation_bundle.rds does not match the original seal; do not regenerate or replace it.")
+  rem_assert(identical(b$schema, "spectral-simulation-design-1") &&
+    identical(b$replicates, 1000L) && identical(b$bootstrap_size, 300L),
+    "Reference design is not the required N=1000, B=300 main simulation.")
+  for (key in c("config", "truths", "parameters", "prediction_exposure", "catalog", "table_map"))
+    rem_assert(identical(b[[key]], ref[[key]]), paste("Reference design/merge disagree:", key))
+  rem_assert(identical(b$config, paper_sim_read_config(ctx$root)),
+    "Main simulation configuration differs from the reference design.")
+  paths <- c(ctx$engine$source_manifest$path, "paper/config/spectral_simulations.csv",
+    "paper/input/dat_1e-4.csv", "paper/input/rho_mat_1e-4.csv", "paper/lib/paper_simulation.R")
+  # Script 32 appends its own fingerprint when it serializes a production bundle.
+  recorded_paths <- b$source_manifest$path
+  rem_assert(!anyDuplicated(recorded_paths) && all(paths %in% recorded_paths) &&
+    identical(b$source_manifest$md5, unname(tools::md5sum(file.path(ctx$root, recorded_paths)))) &&
+    identical(b$source_manifest$md5, ref$seal$sources$md5[match(recorded_paths, ref$seal$sources$path)]),
+    "Main design source/input fingerprints differ from the original sealed design.")
+  rem_assert(identical(b$rng$version, "cmrg-24-streams-per-replicate-v1") &&
+    identical(b$rng$master_seed, b$config$master_seed[1L]) &&
+    identical(b$rng$streams, paper_sim_make_registry(b$rng$master_seed)),
+    "Reference design does not use the canonical main-simulation RNG registry.")
+  invisible(TRUE)
+}
+rem_reference_inputs <- function(ctx, reference = "", reference_bundle = "") {
+  if (!nzchar(reference)) {
+    rem_assert(!nzchar(reference_bundle), "--reference-bundle requires --reference.")
+    return(list(bundle = paper_sim_build_bundle(ctx$root, ctx$engine), ref = NULL,
+      provenance = list(used = FALSE), files = character(), file_hashes = character()))
+  }
+  reference <- normalizePath(reference, winslash = "/", mustWork = TRUE)
+  if (!nzchar(reference_bundle))
+    reference_bundle <- file.path(dirname(dirname(reference)), "simulation_bundle.rds")
+  rem_assert(file.exists(reference_bundle), paste("Original simulation_bundle.rds is required:",
+    reference_bundle, "Supply --reference-bundle=PATH if stored elsewhere; no fresh-design fallback is allowed."))
+  reference_bundle <- normalizePath(reference_bundle, winslash = "/", mustWork = TRUE)
+  files <- c(reference = reference, bundle = reference_bundle)
+  before <- tools::md5sum(files)
+  ref <- readRDS(reference)
+  # Object hashes serialize an R writer-version header as well as the data.
+  # Keep the original exact policy; report a version mismatch explicitly.
+  rem_assert(identical(ref$seal$runtime$R, R.version.string), paste(
+    "Exact main-data replay requires the original R version:", ref$seal$runtime$R,
+    "; current:", R.version.string))
+  body <- ref$seal; body$run_id <- NULL
+  rem_assert(identical(ref$seal$run_id, rem_md5(body)), "Original main-run seal checksum mismatch.")
+  b <- readRDS(reference_bundle)
+  rem_validate_reference_bundle(ctx, ref, b, unname(before[2L]))
+  rem_assert(identical(before, tools::md5sum(files)), "Reference files changed while being read.")
+  list(bundle = b, ref = ref, files = files, file_hashes = before,
+    provenance = list(used = TRUE, run_id = ref$run_id, file_md5 = unname(before[1L]),
+      bundle_file_md5 = unname(before[2L]),
+      design_source = "original sealed simulation_bundle.rds; no recalibration",
+      original_preparation = b$provenance))
+}
+rem_check_reference_data <- function(x, ref, design, setting, replicate) {
+  actual <- rem_md5(list(X = x$X, Y = x$Y))
+  if (!is.null(ref)) {
+    expected <- unname(ref$data_md5[[paste(design, setting, sep = "/")]][replicate])
+    rem_assert(identical(actual, expected), paste("Exact main-data replay failed:", design, setting, replicate,
+      "expected", expected, "actual", actual,
+      "The original design bundle has already been verified. Inspect R/BLAS/runtime diagnostics; no hash was bypassed."))
+  }
+  actual
+}
+rem_prepare <- function(ctx, run, profile = "full", reference = "", reference_bundle = "") {
   dir.create(run, recursive = TRUE, showWarnings = FALSE)
   run <- normalizePath(run, winslash = "/", mustWork = TRUE)
   rem_assert(!file.exists(file.path(run, "seal.rds")), "Run already prepared. Use resume, or a new run directory.")
+  rem_assert(profile != "full" || nzchar(reference), "Full remaining runs require the strict main-simulation reference.")
   cfg <- rem_config(ctx$root, profile); runtime <- rem_runtime(TRUE); src <- rem_sources(ctx)
-  b <- paper_sim_build_bundle(ctx$root, ctx$engine)
+  main <- rem_reference_inputs(ctx, reference, reference_bundle)
+  b <- main$bundle; ref <- main$ref
+  if (!is.null(ref)) cat("Original sealed main design and RNG registry: PASS\nReference bundle MD5:",
+    main$provenance$bundle_file_md5, "\n")
   task <- rem_task_plan(cfg); rng <- rem_rng(cfg)
-  if (nzchar(reference)) {
-    ref <- readRDS(reference)
-    rem_assert(identical(ref$schema, "spectral-merged-1") && identical(ref$seal$validation_only, FALSE) &&
-      length(ref$data_md5) == 12L && all(lengths(ref$data_md5) == 1000L) &&
-      all(grepl("^[0-9a-f]{32}$", unlist(ref$data_md5))), "Reference is not a complete production strict merge.")
-  } else ref <- NULL
+  reference_hashes <- main$file_hashes
   checked <- 0L; write <- function(x, p) paper_write_rds(x, file.path(run, p))
   for (j in which(task$kind == "rank")) {
     t <- task[j, ]; p <- b$parameters[[paste(t$design, t$setting, sep = "/")]]
     data <- lapply(seq.int(t$first, t$last), function(i) {
       x <- paper_sim_data(b, t$design, t$setting, i)
-      h <- rem_md5(list(X = x$X, Y = x$Y))
+      h <- rem_check_reference_data(x, ref, t$design, t$setting, i)
       if (!is.null(ref)) {
-        rem_assert(identical(h, unname(ref$data_md5[[paste(t$design, t$setting, sep = "/")]][i])),
-          paste("Reference data mismatch:", t$design, t$setting, i, "Check the BLAS environment before proceeding."))
         checked <<- checked + 1L
       }
       list(X = x$X, Y = x$Y, data_md5 = h, replicate = i)
@@ -293,14 +363,17 @@ rem_prepare <- function(ctx, run, profile = "full", reference = "") {
   seal <- list(schema = "spectral-remaining-run-1", config = cfg, runtime = runtime, sources = src,
     tasks_md5 = unname(tools::md5sum(file.path(run, "tasks.rds"))), inputs = files, rng = rng,
     catalog = catalog, simulation_config = b$config, truths = b$truths,
-    reference = if (is.null(ref)) list(used = FALSE) else list(used = TRUE, run_id = ref$run_id,
-      file_md5 = unname(tools::md5sum(reference)), matching_datasets = checked),
+    reference = c(main$provenance, list(matching_datasets = checked)),
+    preparation_version = "remaining-cluster-v2-saved-design",
     created_utc = format(Sys.time(), tz = "UTC", usetz = TRUE))
   rem_assert(identical(src, rem_sources(ctx)), "Computation source changed during preparation.")
+  if (length(main$files)) rem_assert(identical(reference_hashes, tools::md5sum(main$files)),
+    "Original reference files changed during preparation.")
   seal$run_id <- rem_md5(seal); write(seal, "seal.rds")
   writeLines(c("SPECTRAL REMAINING PREPARATION: PASS", paste("Run ID:", seal$run_id),
     paste("Profile:", profile), paste("Tasks:", nrow(task)),
     paste("Main-simulation datasets checked:", checked),
+    if (length(main$files)) "Original design and merged reference files unchanged: PASS",
     "All rank/pilot datasets and real-data bootstrap indices are materialized once."), file.path(run, "PREPARATION.txt"))
   cat("SPECTRAL REMAINING PREPARATION: PASS\nRun ID:", seal$run_id, "\nTasks:", nrow(task), "\n")
   invisible(seal)
