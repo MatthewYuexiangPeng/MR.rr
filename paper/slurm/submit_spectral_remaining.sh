@@ -14,7 +14,7 @@ else
   : "${MRRR_REMAIN_ROOT:?Repository root was not exported by the submitter}"
 fi
 cd "$MRRR_REMAIN_ROOT"
-export MRRR_REMAIN_RUN="${MRRR_REMAIN_RUN:-$MRRR_REMAIN_ROOT/paper/output/spectral_rebuild/cluster_remaining_v2}"
+export MRRR_REMAIN_RUN="${MRRR_REMAIN_RUN:-$MRRR_REMAIN_ROOT/paper/output/spectral_rebuild/cluster_remaining_v3}"
 [[ "$MRRR_REMAIN_RUN" == /* ]] || { echo 'MRRR_REMAIN_RUN must be an absolute path.' >&2; exit 2; }
 export MRRR_REMAIN_REFERENCE="${MRRR_REMAIN_REFERENCE:-$MRRR_REMAIN_ROOT/paper/output/spectral_rebuild/cluster_simulations_v1_blas_recovery/run/merged/spectral_simulation_results.rds}"
 export MRRR_REMAIN_REFERENCE_BUNDLE="${MRRR_REMAIN_REFERENCE_BUNDLE:-$(dirname -- "$(dirname -- "$MRRR_REMAIN_REFERENCE")")/simulation_bundle.rds}"

@@ -149,13 +149,13 @@ the cluster checkout with an explicit branch refspec:
     git switch --no-track -c paper/spectral-rebuild refs/remotes/origin/paper/spectral-rebuild
   fi
   git merge --ff-only origin/paper/spectral-rebuild
-  export MRRR_REMAIN_RUN="$PWD/paper/output/spectral_rebuild/cluster_remaining_v2"
+  export MRRR_REMAIN_RUN="$PWD/paper/output/spectral_rebuild/cluster_remaining_v3"
   bash paper/slurm/submit_spectral_remaining.sh submit
 )
 ```
 
 Default output directory:
-`paper/output/spectral_rebuild/cluster_remaining_v2`.
+`paper/output/spectral_rebuild/cluster_remaining_v3`.
 
 Default reference:
 `paper/output/spectral_rebuild/cluster_simulations_v1_blas_recovery/run/merged/spectral_simulation_results.rds`.
@@ -167,9 +167,21 @@ next to `merged/`. Set `MRRR_REMAIN_REFERENCE_BUNDLE=/absolute/path` if it was
 archived elsewhere; the file must still match the original seal. Direct R calls
 accept `--reference-bundle=PATH`. The default is inferred from `--reference`.
 
+The comparator validation fix v3 checks a saved coefficient vector against the
+K-by-1 matrix returned by the audited mr.divw functions. It validates shape,
+length and finiteness, converts the matrix to a vector, then applies the same
+`1e-10` numerical tolerance. It does not change estimator calls or estimates.
+The old comparison could fail on classes despite a zero numerical difference.
+
+Controller `11081460` completed the 26-task development preparation and stopped
+at this comparator check; production arrays were not submitted. The corrected
+validation runs in `cluster_remaining_v3`; keep the failed v2 directory and
+its commit metadata unchanged. `remaining-cluster-v2-saved-design` continues to
+identify the unchanged saved-design preparation policy.
+
 The failed v1 controller `11081429` stopped during preflight before production
 arrays. Keep `cluster_remaining_v1` and its submission commit/logs as evidence;
-use the new default `cluster_remaining_v2` for the corrected code. Do not edit
+use the new default `cluster_remaining_v3` for the corrected code. Do not edit
 the old submission commit file to force a resume with changed source.
 
 The reference reader has base-R regression checks for saved-design reuse,
@@ -259,7 +271,7 @@ be collected with:
 (
   set -e
   cd /home/peng.1276/MRrr-spectral-cluster
-  MRRR_REMAIN_REL=paper/output/spectral_rebuild/cluster_remaining_v2
+  MRRR_REMAIN_REL=paper/output/spectral_rebuild/cluster_remaining_v3
   grep -Fx 'SPECTRAL REMAINING STRICT MERGE: PASS' "$MRRR_REMAIN_REL/merged/STATUS.txt"
   grep -Fx 'Production: TRUE' "$MRRR_REMAIN_REL/merged/STATUS.txt"
   MRRR_REMAIN_ARCHIVE="spectral_remaining_results_$(date -u +%Y%m%dT%H%M%S).tar.gz"

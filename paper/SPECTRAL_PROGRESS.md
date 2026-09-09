@@ -1,11 +1,13 @@
 # Manuscript numerical rebuild status
 
-Snapshot: 2026-09-09 (remaining preparation fix v2).
-The v1 controller `11081429` failed in its preflight reference-data check; no
-production arrays were submitted. V2 loads the original sealed main simulation
-bundle instead of recalibrating the design. Native v2 preflight and production
-completion are pending; the completed main-simulation artifacts remain valid.
- “Generated” describes numerical artifacts. It does not
+Snapshot: 2026-09-09 (comparator validation fix v3).
+The v2 controller `11081460` passed saved-design replay and completed development
+preparation (26 tasks), then stopped on a vector-vs-column-matrix comparator
+validation error. No production arrays were submitted. V3 corrects only this
+comparison and uses a fresh `cluster_remaining_v3` directory. Native v3 preflight
+and production completion remain pending. The v2 saved-design fix and completed
+main-simulation artifacts remain unchanged.
+“Generated” describes numerical artifacts. It does not
 mean the user's current manuscript text has already been replaced and checked.
 
 | Paper item | Computational status | Manuscript status / next action |

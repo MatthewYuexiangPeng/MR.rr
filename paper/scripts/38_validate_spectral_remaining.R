@@ -1,6 +1,24 @@
 #!/usr/bin/env Rscript
 # Base tests are genuinely executable without CVXR/mr.divw/MrDAG.
 # The full native test also executes the actual packages and PSOCK workers.
+remaining_check_comparator_coefficients <- function(saved, direct, expected_length,
+                                                   label, tol = 1e-10) {
+  # The audited mr.divw functions return K-by-1 beta.hat matrices, whereas
+  # indexing a saved C row returns a vector. all.equal(check.attributes=FALSE)
+  # still rejects numeric-vs-matrix classes even when every coefficient agrees.
+  # Check the documented shape before flattening; do not relax numeric checks.
+  valid <- is.numeric(saved) && is.null(dim(saved)) &&
+    is.numeric(direct) && (is.null(dim(direct)) ||
+      identical(dim(direct), c(as.integer(expected_length), 1L))) &&
+    length(saved) == expected_length && length(direct) == expected_length &&
+    all(is.finite(saved)) && all(is.finite(direct))
+  if (!valid) stop("Invalid comparator coefficient shape or non-finite values: ", label, call. = FALSE)
+  same <- all.equal(unname(saved), as.numeric(direct), tolerance = tol, check.attributes = FALSE)
+  if (!isTRUE(same)) stop("Comparator coefficient mismatch: ", label,
+    "; maximum absolute difference = ", format(max(abs(saved - as.numeric(direct))), digits = 16L),
+    "; ", paste(same, collapse = "; "), call. = FALSE)
+  invisible(TRUE)
+}
 validate_remaining <- function(root = getwd(), output = tempfile("remaining_validation_"),
                                base_only = FALSE, cores = 2L, reference = "", reference_bundle = "") {
   dir.create(output, recursive = TRUE, showWarnings = FALSE)
@@ -9,6 +27,15 @@ validate_remaining <- function(root = getwd(), output = tempfile("remaining_vali
   pass <- function(x) cat("PASS:", x, "\n")
   fails <- function(expr) stopifnot(inherits(tryCatch({force(expr); NULL}, error = identity), "error"))
   close <- function(x, y, tol = 1e-10) stopifnot(isTRUE(all.equal(unname(x), unname(y), tolerance = tol, check.attributes = FALSE)))
+  coefficients <- c(-.4, .2, 0, .7, -.1, .3, .8, -.6, .05)
+  remaining_check_comparator_coefficients(coefficients, matrix(coefficients, 9L, 1L), 9L, "matrix fixture")
+  remaining_check_comparator_coefficients(coefficients, coefficients, 9L, "vector fixture")
+  fails(remaining_check_comparator_coefficients(coefficients, matrix(coefficients, 3L, 3L), 9L, "wrong shape"))
+  fails(remaining_check_comparator_coefficients(coefficients, coefficients[-1L], 9L, "wrong length"))
+  fails(remaining_check_comparator_coefficients(coefficients, c(Inf, coefficients[-1L]), 9L, "non-finite"))
+  fails(remaining_check_comparator_coefficients(coefficients, matrix(rev(coefficients), 9L, 1L), 9L, "wrong order"))
+  fails(remaining_check_comparator_coefficients(coefficients, matrix(coefficients + 1e-6, 9L, 1L), 9L, "changed values"))
+  pass("Comparator validation accepts equal vector/column-matrix values and rejects wrong shape, order or coefficients")
   d <- api$rem_real_data(root, cfg)
   raw <- utils::read.csv(file.path(root, "paper/input/dat_1e-4.csv"))
   v <- sqrt(2 * raw$ImpMAF * (1 - raw$ImpMAF))
@@ -165,7 +192,9 @@ validate_remaining <- function(root = getwd(), output = tempfile("remaining_vali
         args <- list(beta.exposure = d$X, se.exposure = d$sx,
           beta.outcome = d$Y[, j], se.outcome = d$sy[, j], gen_cor = d$cor_x)
         if (m == "srivw") args["phi_cand"] <- list(NULL)
-        close(real$point[[paste0(m, "__0")]]$AB[j, ], do.call(f, args)$beta.hat)
+        direct <- do.call(f, args)$beta.hat
+        remaining_check_comparator_coefficients(real$point[[paste0(m, "__0")]]$AB[j, ],
+          direct, ncol(d$X), paste(m, "outcome", j))
       }
     }
     pass("Real IVW/SRIVW adapter agrees with direct native calls including heteroskedastic SE and gen_cor")
